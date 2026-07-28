@@ -1,0 +1,10 @@
+{
+  "maxShotPower": 140.0,
+  "maxShotSpeed": 30.0,
+  "puckMass": 2.0,
+  "ballMass": 1.0,
+  "friction": 0.984,
+  "restitution": 0.93,
+  "edgeRestitution": 0.91,
+  "powerScale": 1.05
+}

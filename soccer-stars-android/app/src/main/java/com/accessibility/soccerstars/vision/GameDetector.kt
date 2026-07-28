@@ -211,7 +211,10 @@ class GameDetector(
 
             val start = near.minByOrNull { hypot(it.first - puck.x, it.second - puck.y) } ?: continue
             val end = near.maxByOrNull {
-                hypot(it.first - start.first, it.second - start.second)
+                hypot(
+                    (it.first - start.first).toDouble(),
+                    (it.second - start.second).toDouble(),
+                )
             } ?: continue
 
             val length = hypot(

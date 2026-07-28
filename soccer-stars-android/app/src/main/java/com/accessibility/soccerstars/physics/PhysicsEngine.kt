@@ -32,8 +32,8 @@ data class CircleBody(
     val radius: Double,
     var vx: Double = 0.0,
     var vy: Double = 0.0,
-    val mass: Double = 1.0,
-    val restitution: Double = 0.92,
+    var mass: Double = 1.0,
+    var restitution: Double = 0.92,
     val friction: Double = 0.985,
 ) {
     fun speed(): Double = hypot(vx, vy)

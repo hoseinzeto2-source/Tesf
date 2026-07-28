@@ -12,111 +12,117 @@ import com.accessibility.soccerstars.vision.GameDetector
 import kotlin.math.hypot
 import kotlin.math.min
 
-class AssistController private constructor(
-    private val detector: GameDetector,
-    private val physicsConfig: PhysicsConfig,
-    private val physics: PhysicsEngine,
-    private val config: AssistConfig,
+class AssistController(
+    physicsPath: String = PhysicsConfig.DEFAULT_PATH,
+    private val rulerExtensionPx: Double = 280.0,
+    private val showPuckPath: Boolean = true,
 ) {
-    constructor() : this(buildDefault())
-
-    companion object {
-        private fun buildDefault(): Quadruple {
-            val cfg = PhysicsConfig.load()
-            return Quadruple(
-                detector = GameDetector(),
-                physicsConfig = cfg,
-                physics = PhysicsEngine(FieldBounds(0.0, 0.0, 1.0, 1.0), cfg),
-                config = AssistConfig(maxShotPower = cfg.maxShotPower, maxShotSpeed = cfg.maxShotSpeed),
-            )
-        }
-    }
-
-    private data class Quadruple(
-        val detector: GameDetector,
-        val physicsConfig: PhysicsConfig,
-        val physics: PhysicsEngine,
-        val config: AssistConfig,
+    private val physicsConfig: PhysicsConfig = PhysicsConfig.load(physicsPath)
+    private val detector = GameDetector(
+        maxShotPower = physicsConfig.maxShotPower,
     )
+    private val physics = PhysicsEngine(FieldBounds(0.0, 0.0, 1.0, 1.0), physicsConfig)
 
-    private constructor(parts: Quadruple) : this(
-        parts.detector,
-        parts.physicsConfig,
-        parts.physics,
-        parts.config,
-    )
-    fun process(bitmap: Bitmap): OverlayState {
+    fun process(bitmap: Bitmap, scale: Float): OverlayState {
         val detection = detector.detect(bitmap)
-        val bounds = detection.bounds ?: return OverlayState(
-            active = false,
-            statusText = "زمین بازی پیدا نشد",
-        )
+        val bounds = detection.bounds ?: return idle("زمین بازی پیدا نشد — Soccer Stars را باز کنید")
 
-        physics.bounds = bounds
-        val shooter = detector.nearestPuckToAim(detection) ?: return OverlayState(
-            active = false,
-            statusText = "مهره را بگیرید و بکشید",
-        )
+        val scaledBounds = scaleBounds(bounds, scale)
+        physics.bounds = scaledBounds
 
-        if (!detection.aim.active || detection.ball == null) {
-            return OverlayState(active = false, statusText = "مهره را بگیرید و بکشید")
+        if (!detection.aim.active) {
+            return idle("مهره را بگیرید و بکشید")
         }
+
+        val shooter = detector.nearestPuckToAim(detection) ?: return idle("مهره را بگیرید و بکشید")
+        val ball = detection.ball ?: return idle("توپ پیدا نشد")
 
         val shot = ShotInput(
             puckId = shooter.id,
             direction = detection.aim.direction,
             power = detection.aim.power,
-            maxPower = config.maxShotPower,
-            maxSpeed = config.maxShotSpeed,
+            maxPower = physicsConfig.maxShotPower,
+            maxSpeed = physicsConfig.maxShotSpeed,
         )
 
-        val bodies = buildBodies(shooter, detection)
-        val goalRect = goalRect(bounds, shooter, detection.ball)
+        val bodies = buildBodies(shooter, ball, detection)
+        val goalRect = goalRect(scaledBounds, shooter, ball)
         val result = physics.simulateShot(bodies, shot, goalRect)
 
         val ruler = buildRulerPoints(
-            shooter.x,
-            shooter.y,
+            shooter.x * scale,
+            shooter.y * scale,
             detection.aim.direction.x,
             detection.aim.direction.y,
             detection.aim.power,
         )
 
-        val powerPercent = ((detection.aim.power / config.maxShotPower) * 100).toInt().coerceIn(0, 100)
+        val powerPercent = ((detection.aim.power / physicsConfig.maxShotPower) * 100)
+            .toInt().coerceIn(0, 100)
+
         val status = when {
             result.goalScored -> "احتمال گل!"
-            powerPercent > 85 -> "قدرت زیاد — دقت کنید"
-            else -> "مسیر توپ پیش‌بینی شد"
+            powerPercent > 88 -> "قدرت زیاد — آرام‌تر بکشید"
+            powerPercent < 15 -> "قدرت کم — بیشتر بکشید"
+            else -> "مسیر توپ آماده است"
         }
 
         return OverlayState(
             active = true,
             statusText = status,
             rulerPoints = ruler,
-            puckPath = result.puckPath.map { PointF(it.first.toFloat(), it.second.toFloat()) },
-            ballPath = result.ballPath.map { PointF(it.first.toFloat(), it.second.toFloat()) },
-            goalPoint = result.ballPath.lastOrNull()?.let { PointF(it.first.toFloat(), it.second.toFloat()) },
+            puckPath = if (showPuckPath) {
+                result.puckPath.map { PointF((it.first * scale).toFloat(), (it.second * scale).toFloat()) }
+            } else {
+                emptyList()
+            },
+            ballPath = result.ballPath.map {
+                PointF((it.first * scale).toFloat(), (it.second * scale).toFloat())
+            },
+            goalPoint = result.ballPath.lastOrNull()?.let {
+                PointF((it.first * scale).toFloat(), (it.second * scale).toFloat())
+            },
             goalScored = result.goalScored,
             powerPercent = powerPercent,
+            showLegend = true,
         )
     }
 
-    private fun buildBodies(shooter: CircleBody, detection: FrameDetection): List<CircleBody> {
+    private fun idle(message: String) = OverlayState(active = false, statusText = message)
+
+    private fun scaleBounds(bounds: FieldBounds, scale: Float): FieldBounds =
+        FieldBounds(
+            left = bounds.left * scale,
+            top = bounds.top * scale,
+            right = bounds.right * scale,
+            bottom = bounds.bottom * scale,
+        )
+
+    private fun buildBodies(
+        shooter: CircleBody,
+        ball: CircleBody,
+        detection: FrameDetection,
+    ): List<CircleBody> {
+        val shooterBody = shooter.copyState().apply { mass = physicsConfig.puckMass }
+        val ballBody = ball.copyState().apply {
+            mass = physicsConfig.ballMass
+            restitution = physicsConfig.restitution
+        }
         val others = detection.pucks
             .filter { it.id != shooter.id }
-            .map { it.copyState() }
-        return listOf(shooter.copyState(), detection.ball!!.copyState()) + others
+            .map { it.copyState().apply { mass = physicsConfig.puckMass } }
+        return listOf(shooterBody, ballBody) + others
     }
 
     private fun goalRect(bounds: FieldBounds, shooter: CircleBody, ball: CircleBody): DoubleArray {
-        val top = bounds.top + (bounds.bottom - bounds.top) * config.goalTopRatio
-        val bottom = bounds.top + (bounds.bottom - bounds.top) * config.goalBottomRatio
-        val margin = config.goalMarginPx
+        val top = bounds.top + (bounds.bottom - bounds.top) * 0.38
+        val bottom = bounds.top + (bounds.bottom - bounds.top) * 0.62
+        val margin = 10.0 * (bounds.right - bounds.left) / 400.0
         val shootUp = ball.y < shooter.y
         return if (shootUp) {
-            doubleArrayOf(bounds.left + margin, top, bounds.left + margin * 3, bottom)
+            doubleArrayOf(bounds.left + margin, top, bounds.left + margin * 4, bottom)
         } else {
-            doubleArrayOf(bounds.right - margin * 3, top, bounds.right - margin, bottom)
+            doubleArrayOf(bounds.right - margin * 4, top, bounds.right - margin, bottom)
         }
     }
 
@@ -132,8 +138,8 @@ class AssistController private constructor(
 
         val ux = dirX / length
         val uy = dirY / length
-        val total = min(config.rulerExtensionPx, 80.0 + power * 1.6)
-        val steps = maxOf(2, (total / config.rulerTickStepPx).toInt())
+        val total = min(rulerExtensionPx, 90.0 + power * 1.8)
+        val steps = maxOf(2, (total / 18.0).toInt())
 
         return (0..steps).map { i ->
             val dist = (total / steps) * i
@@ -144,13 +150,3 @@ class AssistController private constructor(
         }
     }
 }
-
-data class AssistConfig(
-    val maxShotPower: Double = 140.0,
-    val maxShotSpeed: Double = 28.0,
-    val rulerExtensionPx: Double = 280.0,
-    val rulerTickStepPx: Double = 18.0,
-    val goalTopRatio: Double = 0.38,
-    val goalBottomRatio: Double = 0.62,
-    val goalMarginPx: Double = 8.0,
-)

@@ -15,12 +15,18 @@ data class PhysicsConfig(
     val powerScale: Double = 1.0,
 ) {
     companion object {
-        private const val DEFAULT_PATH = "/sdcard/SoccerStarsAssist/physics.json"
+        const val DEFAULT_PATH = "/sdcard/SoccerStarsAssist/physics.json"
 
         fun load(path: String = DEFAULT_PATH): PhysicsConfig {
-            val file = File(path)
-            if (!file.exists()) return PhysicsConfig()
+            val candidates = listOf(path, DEFAULT_PATH)
+            for (candidate in candidates) {
+                val file = File(candidate)
+                if (file.exists()) return parseFile(file)
+            }
+            return PhysicsConfig()
+        }
 
+        private fun parseFile(file: File): PhysicsConfig {
             return try {
                 FileReader(file).use { reader ->
                     val json = JsonReader(reader)

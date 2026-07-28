@@ -4,4 +4,5 @@
     <string name="app_title">کمک‌یار Soccer Stars</string>
     <string name="app_description">وقتی مهره را می‌کشید، خط‌کش شلیک و مسیر احتمالی توپ را روی بازی نشان می‌دهد.\n\n۱) اجازه نمایش روی بازی\n۲) اجازه ضبط صفحه\n۳) Soccer Stars را باز کنید</string>
     <string name="start_assist">شروع ابزار کمکی</string>
+    <string name="open_settings">تنظیمات</string>
 </resources>
