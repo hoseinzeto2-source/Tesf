@@ -1,0 +1,25 @@
+{
+  "capture": {
+    "monitor": 1,
+    "region": null,
+    "fps": 30
+  },
+  "physics": {
+    "max_shot_speed": 28.0,
+    "max_shot_power": 140.0,
+    "puck_radius": 22,
+    "ball_radius": 12,
+    "puck_mass": 2.0,
+    "ball_mass": 1.0
+  },
+  "overlay": {
+    "ruler_extension_px": 260,
+    "ruler_tick_step_px": 18
+  },
+  "goal": {
+    "enabled": true,
+    "top_ratio": 0.38,
+    "bottom_ratio": 0.62,
+    "margin_px": 6
+  }
+}
