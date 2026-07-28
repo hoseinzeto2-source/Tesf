@@ -7,6 +7,17 @@
     <string name="start_assist">شروع ابزار کمکی</string>
     <string name="open_settings">تنظیمات پیشرفته</string>
     <string name="grant_overlay">فعال‌سازی نمایش روی بازی</string>
+    <string name="overlay_help_button">راهنمای دستی (اگر در لیست نیست)</string>
+    <string name="overlay_help_title">اپ در لیست نیست؟</string>
+    <string name="overlay_open_settings">باز کردن تنظیمات</string>
+    <string name="overlay_open_app_info">اطلاعات برنامه</string>
+    <string name="overlay_help_base">نام برنامه: %1$s\n\nاگر در لیست «نمایش روی برنامه‌ها» نیست، مسیر دستی زیر را دنبال کنید:</string>
+    <string name="overlay_help_generic">تنظیمات → برنامه‌ها → %1$s → مجوزها → نمایش روی سایر برنامه‌ها → روشن</string>
+    <string name="overlay_help_miui">شیائومی / Redmi / POCO:\nتنظیمات → برنامه‌ها → مدیریت برنامه‌ها → %1$s → سایر مجوزها → «نمایش پنجره روی برنامه‌ها» یا «نمایش روی سایر برنامه‌ها» → روشن\n\nاگر باز هم نیست:\nتنظیمات → برنامه‌ها → %1$s → اطلاعات برنامه → مجوزهای بیشتر</string>
+    <string name="overlay_help_samsung">سامسونگ:\nتنظیمات → برنامه‌ها → %1$s → نمایش روی سایر برنامه‌ها → اجازه بدهید</string>
+    <string name="overlay_help_huawei">هواوی / Honor:\nتنظیمات → برنامه‌ها → %1$s → مجوزها → نمایش روی سایر برنامه‌ها</string>
+    <string name="overlay_help_oppo">اوپو / Realme:\nتنظیمات → حریم خصوصی → مدیر مجوز → نمایش روی سایر برنامه‌ها → %1$s → روشن</string>
+    <string name="overlay_toast_return">بعد از روشن کردن، به اپ برگردید</string>
     <string name="status_ready">آماده شروع</string>
     <string name="status_need_overlay">ابتدا اجازه نمایش روی بازی لازم است</string>
     <string name="steps_title">مراحل راه‌اندازی</string>

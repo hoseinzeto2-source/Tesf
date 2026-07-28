@@ -1,11 +1,12 @@
 package com.accessibility.soccerstars
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.content.res.ColorStateList
 import android.media.projection.MediaProjectionManager
-import android.net.Uri
+import android.os.Build
 import android.os.Bundle
-import android.provider.Settings
 import android.view.View
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
@@ -17,8 +18,8 @@ import com.accessibility.soccerstars.physics.PhysicsStorage
 class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
 
-    private val overlayPermissionLauncher = registerForActivityResult(
-        ActivityResultContracts.StartActivityForResult(),
+    private val notificationPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission(),
     ) { updateUi() }
 
     private val screenCaptureLauncher = registerForActivityResult(
@@ -49,6 +50,15 @@ class MainActivity : AppCompatActivity() {
             startActivity(Intent(this, SettingsActivity::class.java))
         }
         binding.grantOverlayButton.setOnClickListener { requestOverlayPermission() }
+        binding.overlayHelpButton.setOnClickListener {
+            OverlayPermissionHelper.showManualGuideIfNeeded(this)
+        }
+        binding.stepOverlayCard.setOnClickListener {
+            if (!OverlayPermissionHelper.isGranted(this)) {
+                requestOverlayPermission()
+            }
+        }
+        requestNotificationPermissionIfNeeded()
         updateUi()
     }
 
@@ -57,8 +67,18 @@ class MainActivity : AppCompatActivity() {
         updateUi()
     }
 
+    private fun requestNotificationPermissionIfNeeded() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
+            == PackageManager.PERMISSION_GRANTED
+        ) {
+            return
+        }
+        notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+    }
+
     private fun updateUi() {
-        val overlayGranted = Settings.canDrawOverlays(this)
+        val overlayGranted = OverlayPermissionHelper.isGranted(this)
 
         setStepState(
             binding.stepOverlayIcon,
@@ -85,6 +105,7 @@ class MainActivity : AppCompatActivity() {
         )
 
         binding.grantOverlayButton.visibility = if (overlayGranted) View.GONE else View.VISIBLE
+        binding.overlayHelpButton.visibility = if (overlayGranted) View.GONE else View.VISIBLE
         binding.startButton.isEnabled = overlayGranted
         binding.startButton.alpha = if (overlayGranted) 1f else 0.55f
         binding.statusChip.text = getString(
@@ -117,17 +138,13 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun requestOverlayPermission() {
-        overlayPermissionLauncher.launch(
-            Intent(
-                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                Uri.parse("package:$packageName"),
-            ),
-        )
+        OverlayPermissionHelper.openSettings(this)
+        Toast.makeText(this, R.string.overlay_toast_return, Toast.LENGTH_LONG).show()
     }
 
     private fun startAssistFlow() {
-        if (!Settings.canDrawOverlays(this)) {
-            requestOverlayPermission()
+        if (!OverlayPermissionHelper.isGranted(this)) {
+            OverlayPermissionHelper.showManualGuideIfNeeded(this)
             return
         }
         val manager = getSystemService(MediaProjectionManager::class.java)

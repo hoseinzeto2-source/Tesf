@@ -277,6 +277,18 @@
             app:strokeColor="@color/accent" />
 
         <com.google.android.material.button.MaterialButton
+            android:id="@+id/overlayHelpButton"
+            style="@style/Widget.MaterialComponents.Button.TextButton"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="@string/overlay_help_button"
+            android:textColor="@color/accent_glow"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/grantOverlayButton" />
+
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/startButton"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
@@ -284,7 +296,7 @@
             android:text="@string/start_assist"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@id/grantOverlayButton" />
+            app:layout_constraintTop_toBottomOf="@id/overlayHelpButton" />
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/settingsButton"
