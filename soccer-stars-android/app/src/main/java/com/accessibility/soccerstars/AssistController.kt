@@ -41,7 +41,11 @@ class AssistController(
         process(bitmap, 1f)
 
     private fun buildState(detection: FrameDetection, scale: Float, assistEnabled: Boolean): OverlayState {
-        if (detection.scene == ScenePhase.MENU_OR_HOME && detection.pucks.size < 2) {
+        val inGameplay = detection.pucks.size >= 4 ||
+            (detection.pucks.size >= 2 && detection.ball != null) ||
+            detection.isPostShot
+
+        if (detection.scene == ScenePhase.MENU_OR_HOME && !inGameplay) {
             return idle(
                 "صفحه اصلی یا منو — وارد مسابقه Soccer Stars شوید",
                 detection,
@@ -49,8 +53,16 @@ class AssistController(
             )
         }
 
-        if (detection.bounds == null) {
+        if (detection.bounds == null && !inGameplay) {
             return idle("زمین بازی پیدا نشد — Soccer Stars را در مسابقه باز کنید", detection, scale)
+        }
+
+        if (detection.bounds == null) {
+            return idle(
+                "مسابقه شناسایی شد · آبی:${detection.bluePuckCount} قرمز:${detection.redPuckCount}",
+                detection,
+                scale,
+            )
         }
 
         val bounds = detection.bounds
@@ -62,11 +74,17 @@ class AssistController(
         }
 
         if (!detection.aim.active) {
-            return idle(
-                "مهره را بگیرید و بکشید · آبی:${detection.bluePuckCount} قرمز:${detection.redPuckCount}",
-                detection,
-                scale,
-            )
+            val msg = if (detection.isPostShot) {
+                val fastest = detection.postShotMotions.maxByOrNull { it.speed }
+                if (fastest != null) {
+                    "بعد از شلیک — سریع‌ترین مهره ${fastest.team}: سرعت ${fastest.speed.toInt()}"
+                } else {
+                    "بعد از شلیک — آبی:${detection.bluePuckCount} قرمز:${detection.redPuckCount}"
+                }
+            } else {
+                "مهره را بگیرید و بکشید · آبی:${detection.bluePuckCount} قرمز:${detection.redPuckCount}"
+            }
+            return idle(msg, detection, scale)
         }
 
         val shooter = detector.nearestPuckToAim(detection)

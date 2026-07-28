@@ -33,6 +33,8 @@ data class FrameDetection(
     val redPuckCount: Int = 0,
     val analysisNotes: List<String> = emptyList(),
     val mapFamily: String? = null,
+    val postShotMotions: List<MotionTrailDetector.MotionEstimate> = emptyList(),
+    val isPostShot: Boolean = false,
 )
 
 class GameDetector(
@@ -40,6 +42,8 @@ class GameDetector(
     private val maxShotPower: Double = 140.0,
 ) {
     private val colorMatcher = FieldColorMatcher(context)
+    private val puckValidator = PuckValidator(colorMatcher)
+    private val motionDetector = MotionTrailDetector(puckValidator)
     private val tracker = DetectionTracker()
     private val fieldDetector = FieldDetector(colorMatcher)
 
@@ -89,10 +93,13 @@ class GameDetector(
         val pucks = detectPucks(bitmap, playArea, ball, puckRadius)
         val aim = detectAimLine(bitmap, playArea, pucks, maxShotPower)
 
+        val motions = if (!aim.active && pucks.size >= 4) motionDetector.detect(bitmap, pucks) else emptyList()
+        val isPostShot = !aim.active && motions.isNotEmpty()
+
         val blueCount = pucks.count { it.kind == "puck_blue" }
         val redCount = pucks.count { it.kind == "puck_red" }
         val mapFamily = colorMatcher.detectMapFamily(bitmap)
-        val notes = buildAnalysisNotes(scan, pucks, ball, aim, blueCount, redCount, mapFamily)
+        val notes = buildAnalysisNotes(scan, pucks, ball, aim, blueCount, redCount, mapFamily, motions, isPostShot)
 
         val raw = FrameDetection(
             bounds = bounds,
@@ -106,6 +113,8 @@ class GameDetector(
             redPuckCount = redCount,
             analysisNotes = notes,
             mapFamily = mapFamily,
+            postShotMotions = motions,
+            isPostShot = isPostShot,
         )
         return tracker.smooth(raw, puckRadius, ballRadius)
     }
@@ -152,13 +161,23 @@ class GameDetector(
         blueCount: Int,
         redCount: Int,
         mapFamily: String?,
+        motions: List<MotionTrailDetector.MotionEstimate>,
+        isPostShot: Boolean,
     ): List<String> = buildList {
         mapFamily?.let { add("نوع مپ: $it") }
         add("زمین: ${(scan.centerTurfRatio * 100).toInt()}% · خطوط سفید: ${(scan.whiteLineRatio * 1000).toInt()}/1000")
         add("مهره آبی: $blueCount · مهره قرمز: $redCount")
         if (ball != null) add("توپ: (${ball.x.toInt()}, ${ball.y.toInt()})")
-        if (aim.active) add("فلش شلیک: قدرت ${aim.power.toInt()}")
-        else add("فلش شلیک: پیدا نشد — مهره را بکشید")
+        when {
+            aim.active -> add("فلش شلیک: قدرت ${aim.power.toInt()}")
+            isPostShot -> {
+                add("بعد از شلیک — ${motions.size} مهره در حرکت")
+                motions.take(3).forEach { m ->
+                    add("  ${m.team}: سرعت ${m.speed.toInt()} · طول مسیر ${m.trailLength.toInt()}px")
+                }
+            }
+            else -> add("فلش شلیک: پیدا نشد — مهره را بکشید یا عکس بعد از شلیک بگذارید")
+        }
     }
 
     private fun scoreSceneConfidence(scan: FieldScan): Float = when (scan.scene) {
@@ -213,21 +232,25 @@ class GameDetector(
         ball: CircleBody?,
         radius: Double,
     ): List<CircleBody> {
-        val candidates = mutableListOf<TaggedCandidate>()
-        val step = max(3, (radius / 2.2).toInt())
+        val candidates = mutableListOf<PuckValidator.ScoredPuck>()
+        val step = max(4, (radius / 2.0).toInt())
         var y = area.top.toInt()
         while (y < area.bottom) {
             var x = area.left.toInt()
             while (x < area.right) {
                 val pixel = bitmap.getPixel(x, y)
-                val team = puckTeam(pixel)
+                val team = puckValidator.teamAt(bitmap, pixel, x, y)
                 if (team != null) {
-                    val refined = refineCircle(bitmap, x, y, radius * 0.65, radius * 1.35, { c ->
-                        puckTeam(c) == team
-                    })
-                    if (refined != null && isValidPuck(bitmap, refined)) {
-                        val bonus = puckColorBonus(bitmap, refined.x.toInt(), refined.y.toInt())
-                        candidates += TaggedCandidate(refined, team, refined.score + bonus)
+                    val refined = refineCircle(bitmap, x, y, radius * 0.68, radius * 1.32) { c ->
+                        puckValidator.teamAt(bitmap, c, x, y) == team
+                    }
+                    if (refined != null) {
+                        val score = puckValidator.scoreCandidate(bitmap, refined.x, refined.y, refined.radius, team)
+                        if (score >= 42) {
+                            candidates += PuckValidator.ScoredPuck(
+                                refined.x, refined.y, refined.radius, team, score + refined.score,
+                            )
+                        }
                     }
                 }
                 x += step
@@ -235,14 +258,27 @@ class GameDetector(
             y += step
         }
 
-        return mergeTagged(candidates, radius * 1.40)
-            .sortedByDescending { it.candidate.score }
-            .take(14)
-            .mapIndexedNotNull { index, tagged ->
-                val c = tagged.candidate
-                if (ball != null && hypot(c.x - ball.x, c.y - ball.y) < radius + ball.radius) null
-                else CircleBody(index, "puck_${tagged.team}", c.x, c.y, c.radius, mass = 2.0)
+        val merged = mergeScored(candidates, radius * 1.9)
+        return puckValidator.filterAndCap(merged)
+            .mapIndexed { index, c ->
+                CircleBody(index, "puck_${c.team}", c.x, c.y, c.radius, mass = 2.0)
             }
+            .filter { puck ->
+                ball == null || hypot(puck.x - ball.x, puck.y - ball.y) >= radius + ball.radius * 0.8
+            }
+    }
+
+    private fun mergeScored(
+        candidates: List<PuckValidator.ScoredPuck>,
+        minDistance: Double,
+    ): List<PuckValidator.ScoredPuck> {
+        val sorted = candidates.sortedByDescending { it.score }
+        val kept = mutableListOf<PuckValidator.ScoredPuck>()
+        for (c in sorted) {
+            val tooClose = kept.any { hypot(it.x - c.x, it.y - c.y) < minDistance }
+            if (!tooClose) kept += c
+        }
+        return kept
     }
 
     private fun detectAimLine(
@@ -313,46 +349,6 @@ class GameDetector(
         )
     }
 
-    private fun isValidPuck(bitmap: Bitmap, refined: CircleCandidate): Boolean {
-        if (hasPuckWhiteRing(bitmap, refined.x, refined.y, refined.radius)) return true
-        if (hasMetalRim(bitmap, refined.x, refined.y, refined.radius)) return true
-        return puckColorBonus(bitmap, refined.x.toInt(), refined.y.toInt()) >= 8
-    }
-
-    private fun hasPuckWhiteRing(bitmap: Bitmap, cx: Double, cy: Double, radius: Double): Boolean {
-        var white = 0
-        var total = 0
-        val ringR = radius * 1.05
-        val steps = 14
-        for (i in 0 until steps) {
-            val angle = 2 * PI * i / steps
-            val x = (cx + cos(angle) * ringR).toInt()
-            val y = (cy + sin(angle) * ringR).toInt()
-            if (x in 0 until bitmap.width && y in 0 until bitmap.height) {
-                total++
-                val c = bitmap.getPixel(x, y)
-                if (isBallColor(c) || isMetalColor(c)) white++
-            }
-        }
-        return total > 0 && white >= steps / 5
-    }
-
-    private fun hasMetalRim(bitmap: Bitmap, cx: Double, cy: Double, radius: Double): Boolean {
-        var metal = 0
-        val ringR = radius * 1.02
-        for (i in 0 until 10) {
-            val angle = 2 * PI * i / 10
-            val x = (cx + cos(angle) * ringR).toInt()
-            val y = (cy + sin(angle) * ringR).toInt()
-            if (x in 0 until bitmap.width && y in 0 until bitmap.height &&
-                isMetalColor(bitmap.getPixel(x, y))
-            ) {
-                metal++
-            }
-        }
-        return metal >= 3
-    }
-
     private fun isBallPattern(bitmap: Bitmap, cx: Double, cy: Double, radius: Double): Boolean {
         val whiteHits = countDisk(bitmap, cx.toInt(), cy.toInt(), radius * 0.55, ::isBallColor)
         val darkHits = countDisk(bitmap, cx.toInt(), cy.toInt(), radius * 0.55) { c ->
@@ -363,7 +359,6 @@ class GameDetector(
     }
 
     private data class CircleCandidate(val x: Double, val y: Double, val radius: Double, val score: Int)
-    private data class TaggedCandidate(val candidate: CircleCandidate, val team: String, val score: Int)
 
     private fun refineCircle(
         bitmap: Bitmap,
@@ -436,30 +431,7 @@ class GameDetector(
         return kept
     }
 
-    private fun mergeTagged(candidates: List<TaggedCandidate>, minDistance: Double): List<TaggedCandidate> {
-        val sorted = candidates.sortedByDescending { it.score }
-        val kept = mutableListOf<TaggedCandidate>()
-        for (c in sorted) {
-            val tooClose = kept.any {
-                hypot(it.candidate.x - c.candidate.x, it.candidate.y - c.candidate.y) < minDistance
-            }
-            if (!tooClose) kept += c
-        }
-        return kept
-    }
-
-    private fun puckTeam(color: Int): String? = when {
-        isRedTeam(color) -> "red"
-        isBlueTeam(color) -> "blue"
-        else -> null
-    }
-
     private fun isBallColor(color: Int): Boolean = colorMatcher.isBallColor(color)
-
-    private fun isMetalColor(color: Int): Boolean {
-        val hsv = hsv(color)
-        return hsv[1] <= ColorCalibration.METAL_S_MAX && hsv[2] >= ColorCalibration.METAL_V_MIN
-    }
 
     private fun isYellowLine(color: Int): Boolean {
         val hsv = hsv(color)
@@ -476,25 +448,6 @@ class GameDetector(
     }
 
     private fun isAimGuideLine(color: Int): Boolean = isYellowLine(color) || isOrangeLine(color)
-
-    private fun isRedTeam(color: Int): Boolean = colorMatcher.isRedTeam(color)
-
-    private fun isBlueTeam(color: Int): Boolean = colorMatcher.isBlueTeam(color)
-
-    private fun puckColorBonus(bitmap: Bitmap, cx: Int, cy: Int): Int {
-        var bonus = 0
-        for (dx in -4..4) {
-            for (dy in -4..4) {
-                val x = cx + dx
-                val y = cy + dy
-                if (x !in 0 until bitmap.width || y !in 0 until bitmap.height) continue
-                val c = bitmap.getPixel(x, y)
-                if (isRedTeam(c) || isBlueTeam(c)) bonus += 4
-                if (isMetalColor(c)) bonus += 2
-            }
-        }
-        return bonus
-    }
 
     private fun hsv(color: Int): FloatArray {
         val hsv = FloatArray(3)

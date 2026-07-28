@@ -29,16 +29,16 @@ class FieldColorMatcher(context: Context) {
 
     fun isBlueTeam(color: Int): Boolean {
         val hsv = hsv(color)
-        return hsv[0] in MapProfileDatabase.blueHueMin..MapProfileDatabase.blueHueMax &&
-            hsv[1] >= MapProfileDatabase.blueSatMin &&
-            hsv[2] >= MapProfileDatabase.blueValMin
+        return hsv[0] in PuckValidator.BLUE_H_MIN..PuckValidator.BLUE_H_MAX &&
+            hsv[1] >= PuckValidator.BLUE_S_MIN &&
+            hsv[2] >= PuckValidator.BLUE_V_MIN
     }
 
     fun isRedTeam(color: Int): Boolean {
         val hsv = hsv(color)
-        return (hsv[0] <= MapProfileDatabase.redHueMax || hsv[0] >= ColorCalibration.RED_H_WRAP_MIN) &&
-            hsv[1] >= MapProfileDatabase.redSatMin &&
-            hsv[2] >= MapProfileDatabase.redValMin
+        return (hsv[0] <= PuckValidator.RED_H_MAX || hsv[0] >= PuckValidator.RED_H_WRAP) &&
+            hsv[1] >= PuckValidator.RED_S_MIN &&
+            hsv[2] >= PuckValidator.RED_V_MIN
     }
 
     fun detectMapFamily(bitmap: Bitmap): String? =

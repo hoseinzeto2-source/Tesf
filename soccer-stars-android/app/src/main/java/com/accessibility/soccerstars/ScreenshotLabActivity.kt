@@ -94,6 +94,12 @@ class ScreenshotLabActivity : AppCompatActivity() {
         }
         appendLine()
         appendLine("پیام: ${state.statusText}")
+        if (state.analysisNotes.any { it.contains("بعد از شلیک") }) {
+            appendLine()
+            appendLine("── تحلیل بعد از شلیک ──")
+            state.analysisNotes.filter { it.contains("سرعت") || it.contains("بعد از شلیک") || it.contains("حرکت") }
+                .forEach { appendLine(it) }
+        }
         appendLine()
         if (state.finalBallPoint != null) {
             appendLine("🎯 مقصد نهایی توپ:")

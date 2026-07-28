@@ -31,6 +31,8 @@ class DetectionTracker {
             pucks = pucks,
             ball = ball,
             aim = aim,
+            bluePuckCount = pucks.count { it.kind == "puck_blue" },
+            redPuckCount = pucks.count { it.kind == "puck_red" },
         )
     }
 
@@ -56,6 +58,8 @@ class DetectionTracker {
                 used[bestIdx] = true
                 val c = current[bestIdx]
                 merged += prev.copy(
+                    id = c.id,
+                    kind = c.kind,
                     x = prev.x * 0.35 + c.x * 0.65,
                     y = prev.y * 0.35 + c.y * 0.65,
                     radius = prev.radius * 0.5 + c.radius * 0.5,

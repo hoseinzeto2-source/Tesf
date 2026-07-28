@@ -172,7 +172,7 @@ object MapProfileDatabase {
         "gold" to ProfileBounds(35f, 100f, 0.08f, 0.12f),
         "ice" to ProfileBounds(165f, 225f, 0.05f, 0.35f),
         "cyber" to ProfileBounds(110f, 240f, 0.15f, 0.12f),
-        "street" to ProfileBounds(25f, 250f, 0.08f, 0.18f),
+        "street" to ProfileBounds(12f, 58f, 0.08f, 0.15f),
         "arena" to ProfileBounds(20f, 250f, 0.15f, 0.22f),
     )
 }
