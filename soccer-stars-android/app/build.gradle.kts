@@ -11,8 +11,8 @@ android {
         applicationId = "com.accessibility.soccerstars"
         minSdk = 26
         targetSdk = 34
-        versionCode = 8
-        versionName = "1.1.0"
+        versionCode = 9
+        versionName = "1.1.1"
     }
 
     buildTypes {

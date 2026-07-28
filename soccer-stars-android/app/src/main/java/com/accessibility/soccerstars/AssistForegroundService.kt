@@ -34,6 +34,7 @@ class AssistForegroundService : Service() {
     private var virtualDisplay: VirtualDisplay? = null
 
     private var overlayView: GuideOverlayView? = null
+    private var statusBadge: StatusBadgeView? = null
     private var overlayController: OverlayController? = null
     private var windowManager: WindowManager? = null
     private lateinit var assistNotification: AssistNotification
@@ -130,7 +131,9 @@ class AssistForegroundService : Service() {
         mediaProjection?.stop()
 
         overlayController?.destroy()
+        statusBadge?.let { windowManager?.removeView(it) }
         overlayView = null
+        statusBadge = null
         overlayController = null
         super.onDestroy()
     }
@@ -187,6 +190,26 @@ class AssistForegroundService : Service() {
         wm.addView(overlayView, params)
         overlayController = OverlayController(wm, overlayView)
         overlayController?.hide()
+
+        setupStatusBadge(wm, layoutType)
+    }
+
+    private fun setupStatusBadge(wm: WindowManager, layoutType: Int) {
+        statusBadge = StatusBadgeView(this).apply {
+            statusText = "در حال آماده‌سازی..."
+        }
+        val params = WindowManager.LayoutParams(
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            layoutType,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE,
+            PixelFormat.TRANSLUCENT,
+        ).apply {
+            gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
+            y = 32
+        }
+        wm.addView(statusBadge, params)
     }
 
     private fun startCapture(resultCode: Int, data: Intent) {
@@ -241,6 +264,7 @@ class AssistForegroundService : Service() {
             val status = AccessibilityHelper.statusLabel(this, pkg)
             mainHandler.post {
                 overlayController?.applyScene(ScenePhase.MENU_OR_HOME, soccerStarsForeground = false)
+                statusBadge?.statusText = status
                 lastStatusLine = status
                 refreshNotification()
                 processing = false
@@ -261,11 +285,12 @@ class AssistForegroundService : Service() {
         scaled.recycle()
 
         mainHandler.post {
-            val inGame = soccerStarsForeground && state.scenePhase != ScenePhase.MENU_OR_HOME
-            overlayController?.applyScene(state.scenePhase, soccerStarsForeground)
-            if (inGame) {
+            val showGameOverlay = soccerStarsForeground || state.scenePhase == ScenePhase.IN_MATCH
+            overlayController?.applyScene(state.scenePhase, showGameOverlay)
+            if (showGameOverlay) {
                 overlayView?.updateState(state)
             }
+            statusBadge?.statusText = state.statusText
             lastStatusLine = state.statusText
             refreshNotification()
             processing = false

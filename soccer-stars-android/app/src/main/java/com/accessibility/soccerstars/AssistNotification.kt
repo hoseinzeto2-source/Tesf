@@ -47,10 +47,10 @@ class AssistNotification(private val context: Context) {
         val channel = NotificationChannel(
             CHANNEL_ID,
             "Soccer Stars Assist",
-            NotificationManager.IMPORTANCE_LOW,
+            NotificationManager.IMPORTANCE_DEFAULT,
         ).apply {
-            description = "کنترل راهنما بدون پنجره روی صفحه"
-            setShowBadge(false)
+            description = "کنترل راهنما — راهنما، دیباگ، تنظیمات، توقف"
+            setShowBadge(true)
         }
         manager.createNotificationChannel(channel)
     }

@@ -49,7 +49,7 @@
     <string name="step_play_locked">ابتدا ابزار را شروع کنید</string>
     <string name="legend_title">راهنمای رنگ‌ها در بازی</string>
     <string name="legend_body">سفید = خط‌کش شلیک · آبی = مسیر توپ · زرد = مسیر مهره · سبز = احتمال گل</string>
-    <string name="toast_started">فعال شد — Soccer Stars را باز کنید</string>
+    <string name="toast_started">فعال شد — نوار «SS Assist» بالای صفحه + کنترل از نوار اعلان پایین</string>
     <string name="toast_capture_denied">بدون اجازه ضبط صفحه امکان‌پذیر نیست</string>
     <string name="settings_title">تنظیمات</string>
     <string name="settings_save">ذخیره تنظیمات</string>

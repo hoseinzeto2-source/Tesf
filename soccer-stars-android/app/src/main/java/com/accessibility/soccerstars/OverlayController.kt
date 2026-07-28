@@ -21,7 +21,7 @@ class OverlayController(
     }
 
     fun applyScene(scene: ScenePhase, soccerStarsForeground: Boolean) {
-        val shouldShow = soccerStarsForeground && scene != ScenePhase.MENU_OR_HOME
+        val shouldShow = soccerStarsForeground || scene == ScenePhase.IN_MATCH
         if (shouldShow) show() else hide()
     }
 
