@@ -12,6 +12,13 @@ class DetectionTracker {
     private var lastAim: AimState = AimState(false, null, null, com.accessibility.soccerstars.physics.Vec2(0.0, 0.0), 0.0)
 
     fun smooth(raw: FrameDetection, puckRadius: Double, ballRadius: Double): FrameDetection {
+        if (raw.scene != ScenePhase.IN_MATCH) {
+            lastPucks = emptyList()
+            lastBall = null
+            lastAim = AimState(false, null, null, com.accessibility.soccerstars.physics.Vec2(0.0, 0.0), 0.0)
+            return raw
+        }
+
         val pucks = smoothPucks(raw.pucks, puckRadius)
         val ball = smoothBall(raw.ball, ballRadius)
         val aim = if (raw.aim.active) raw.aim else decayAim()
@@ -28,8 +35,8 @@ class DetectionTracker {
     }
 
     private fun smoothPucks(current: List<CircleBody>, radius: Double): List<CircleBody> {
+        if (current.isEmpty()) return emptyList()
         if (lastPucks.isEmpty()) return current
-        if (current.isEmpty()) return lastPucks
 
         val used = BooleanArray(current.size)
         val merged = mutableListOf<CircleBody>()
@@ -63,8 +70,8 @@ class DetectionTracker {
     }
 
     private fun smoothBall(current: CircleBody?, radius: Double): CircleBody? {
+        if (current == null) return null
         val prev = lastBall
-        if (current == null) return prev
         if (prev == null) return current
         val d = hypot(current.x - prev.x, current.y - prev.y)
         return if (d < radius * 4) {

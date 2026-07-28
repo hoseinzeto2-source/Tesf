@@ -28,7 +28,7 @@ object AppPreferences {
         prefs(context).getBoolean(KEY_SHOW_LEGEND, true)
 
     fun processScale(context: Context): Float =
-        prefs(context).getFloat(KEY_PROCESS_SCALE, 0.45f).coerceIn(0.25f, 1.0f)
+        prefs(context).getFloat(KEY_PROCESS_SCALE, 0.55f).coerceIn(0.25f, 1.0f)
 
     fun showDebug(context: Context): Boolean =
         prefs(context).getBoolean(KEY_SHOW_DEBUG, false)

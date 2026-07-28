@@ -68,6 +68,12 @@ class GuideOverlayView(context: Context) : View(context) {
     setShadowLayer(5f, 0f, 0f, Color.BLACK)
   }
 
+  private val debugFieldPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+    color = Color.argb(140, 0, 255, 120)
+    strokeWidth = 2f
+    style = Paint.Style.STROKE
+  }
+
   private val debugPuckPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
     color = Color.argb(160, 255, 120, 255)
     strokeWidth = 2f
@@ -115,6 +121,7 @@ class GuideOverlayView(context: Context) : View(context) {
     drawHudPanel(canvas)
 
     if (showDebug) {
+      state.debugField?.let { canvas.drawRect(it, debugFieldPaint) }
       state.debugBall?.let { canvas.drawCircle(it.x, it.y, 14f, debugBallPaint) }
       for (p in state.debugPucks) {
         canvas.drawCircle(p.x, p.y, 20f, debugPuckPaint)
@@ -166,7 +173,12 @@ class GuideOverlayView(context: Context) : View(context) {
     canvas.drawText(state.statusText, left + 16f, top + 58f, subTextPaint)
 
     val conf = (state.confidence * 100).toInt()
-    canvas.drawText("دقت تشخیص: $conf%", left + 16f, top + 86f, legendPaint)
+    val scene = when (state.scenePhase) {
+      com.accessibility.soccerstars.vision.ScenePhase.IN_MATCH -> "مسابقه"
+      com.accessibility.soccerstars.vision.ScenePhase.MENU_OR_HOME -> "منو/صفحه اصلی"
+      com.accessibility.soccerstars.vision.ScenePhase.UNKNOWN -> "نامشخص"
+    }
+    canvas.drawText("وضعیت: $scene · دقت: $conf%", left + 16f, top + 86f, legendPaint)
 
     if (state.active) {
       canvas.drawText("قدرت: ${state.powerPercent}%", left + 190f, top + 86f, legendPaint)

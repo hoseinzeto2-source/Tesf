@@ -2,6 +2,7 @@ package com.accessibility.soccerstars
 
 import android.graphics.Bitmap
 import android.graphics.PointF
+import android.graphics.RectF
 import com.accessibility.soccerstars.physics.CircleBody
 import com.accessibility.soccerstars.physics.FieldBounds
 import com.accessibility.soccerstars.physics.PhysicsConfig
@@ -9,6 +10,7 @@ import com.accessibility.soccerstars.physics.PhysicsEngine
 import com.accessibility.soccerstars.physics.ShotInput
 import com.accessibility.soccerstars.vision.FrameDetection
 import com.accessibility.soccerstars.vision.GameDetector
+import com.accessibility.soccerstars.vision.ScenePhase
 import java.io.File
 import kotlin.math.hypot
 import kotlin.math.min
@@ -27,8 +29,20 @@ class AssistController(
 
     fun process(bitmap: Bitmap, scale: Float): OverlayState {
         val detection = detector.detect(bitmap)
-        val bounds = detection.bounds ?: return idle("زمین بازی پیدا نشد — Soccer Stars را باز کنید", detection, scale)
 
+        if (detection.scene == ScenePhase.MENU_OR_HOME) {
+            return idle(
+                "صفحه اصلی یا منو — وارد مسابقه Soccer Stars شوید",
+                detection,
+                scale,
+            )
+        }
+
+        if (detection.scene != ScenePhase.IN_MATCH || detection.bounds == null) {
+            return idle("زمین بازی پیدا نشد — Soccer Stars را در مسابقه باز کنید", detection, scale)
+        }
+
+        val bounds = detection.bounds
         val scaledBounds = scaleBounds(bounds, scale)
         physics.bounds = scaledBounds
 
@@ -37,7 +51,7 @@ class AssistController(
         }
 
         val shooter = detector.nearestPuckToAim(detection) ?: return idle("مهره را بگیرید و بکشید", detection, scale)
-        val ball = detection.ball ?: return idle("توپ پیدا نشد", detection, scale)
+        val ball = detection.ball ?: return idle("توپ پیدا نشد — کیفیت تشخیص را بالا ببرید", detection, scale)
 
         val shot = ShotInput(
             puckId = shooter.id,
@@ -90,6 +104,8 @@ class AssistController(
             confidence = detection.confidence,
             debugPucks = detection.pucks.map { PointF((it.x * scale).toFloat(), (it.y * scale).toFloat()) },
             debugBall = detection.ball?.let { PointF((it.x * scale).toFloat(), (it.y * scale).toFloat()) },
+            debugField = fieldRect(bounds, scale),
+            scenePhase = detection.scene,
         )
     }
 
@@ -100,8 +116,25 @@ class AssistController(
         active = false,
         statusText = message,
         confidence = detection.confidence,
-        debugPucks = detection.pucks.map { PointF((it.x * scale).toFloat(), (it.y * scale).toFloat()) },
-        debugBall = detection.ball?.let { PointF((it.x * scale).toFloat(), (it.y * scale).toFloat()) },
+        debugPucks = if (detection.scene == ScenePhase.IN_MATCH) {
+            detection.pucks.map { PointF((it.x * scale).toFloat(), (it.y * scale).toFloat()) }
+        } else {
+            emptyList()
+        },
+        debugBall = if (detection.scene == ScenePhase.IN_MATCH) {
+            detection.ball?.let { PointF((it.x * scale).toFloat(), (it.y * scale).toFloat()) }
+        } else {
+            null
+        },
+        debugField = detection.bounds?.let { fieldRect(it, scale) },
+        scenePhase = detection.scene,
+    )
+
+    private fun fieldRect(bounds: FieldBounds, scale: Float) = RectF(
+        (bounds.left * scale).toFloat(),
+        (bounds.top * scale).toFloat(),
+        (bounds.right * scale).toFloat(),
+        (bounds.bottom * scale).toFloat(),
     )
 
     private fun scaleBounds(bounds: FieldBounds, scale: Float): FieldBounds =
