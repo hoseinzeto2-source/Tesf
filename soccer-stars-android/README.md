@@ -4,7 +4,16 @@
 
 ## دانلود APK
 
-**نسخه 1.2.2 (جدید):** `releases/SoccerStarsAssist-v1.2.2.apk`
+**نسخه 1.2.3 (جدید):** `releases/SoccerStarsAssist-v1.2.3.apk`
+
+`https://github.com/hoseinzeto2-source/Tesf/releases/download/v1.2.3/SoccerStarsAssist-v1.2.3.apk`
+
+### تغییرات v1.2.3
+- **تحلیل جفت عکس** (قبل/بعد شلیک) در آزمایشگاه — موقعیت دقیق مهره‌ها
+- دو دکمه جدا برای عکس قبل و بعد شلیک
+- گزارش فارسی با مختصات و جابجایی هر مهره
+
+**نسخه 1.2.2:** `releases/SoccerStarsAssist-v1.2.2.apk`
 
 `https://github.com/hoseinzeto2-source/Tesf/releases/download/v1.2.2/SoccerStarsAssist-v1.2.2.apk`
 
