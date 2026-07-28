@@ -14,6 +14,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import com.accessibility.soccerstars.databinding.ActivityMainBinding
 import com.accessibility.soccerstars.physics.PhysicsStorage
+import com.accessibility.soccerstars.vision.MapProfileDatabase
 
 class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
@@ -42,6 +43,7 @@ class MainActivity : AppCompatActivity() {
 
         try {
             PhysicsStorage.ensureDefault(this)
+        MapProfileDatabase.ensureLoaded(this)
         } catch (_: Exception) {
             // Assets fallback handled inside PhysicsStorage.loadConfig
         }

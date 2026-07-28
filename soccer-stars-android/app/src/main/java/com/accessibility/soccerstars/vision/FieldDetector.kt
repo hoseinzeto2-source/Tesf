@@ -1,7 +1,6 @@
 package com.accessibility.soccerstars.vision
 
 import android.graphics.Bitmap
-import android.graphics.Color
 import com.accessibility.soccerstars.physics.FieldBounds
 import kotlin.math.max
 import kotlin.math.min
@@ -15,7 +14,9 @@ data class FieldScan(
     val whiteLineRatio: Float = 0f,
 )
 
-class FieldDetector {
+class FieldDetector(
+    private val colorMatcher: FieldColorMatcher,
+) {
     fun scan(bitmap: Bitmap): FieldScan {
         val width = bitmap.width
         val height = bitmap.height
@@ -107,7 +108,7 @@ class FieldDetector {
             var x = left
             while (x < right) {
                 total++
-                if (isFieldTurf(bitmap.getPixel(x, y))) turf++
+                if (colorMatcher.isFieldTurf(bitmap.getPixel(x, y))) turf++
                 x += step
             }
             y += step
@@ -128,7 +129,7 @@ class FieldDetector {
             var x = left
             while (x < right) {
                 total++
-                if (isFieldLine(bitmap.getPixel(x, y))) white++
+                if (colorMatcher.isFieldLine(bitmap.getPixel(x, y))) white++
                 x += step
             }
             y += step
@@ -150,7 +151,7 @@ class FieldDetector {
             var x = marginX
             while (x < width - marginX) {
                 total++
-                if (isFieldTurf(bitmap.getPixel(x, y))) turf++
+                if (colorMatcher.isFieldTurf(bitmap.getPixel(x, y))) turf++
                 x += stepX
             }
             val ratio = if (total == 0) 0f else turf.toFloat() / total
@@ -172,7 +173,7 @@ class FieldDetector {
             var ry = top
             while (ry <= bottom) {
                 total++
-                if (isFieldTurf(bitmap.getPixel(x, ry))) turf++
+                if (colorMatcher.isFieldTurf(bitmap.getPixel(x, ry))) turf++
                 ry += stepY
             }
             val ratio = if (total == 0) 0f else turf.toFloat() / total
@@ -193,23 +194,5 @@ class FieldDetector {
             right = right - padX,
             bottom = bottom - padY,
         )
-    }
-
-    private fun isFieldTurf(color: Int): Boolean {
-        val hsv = FloatArray(3)
-        Color.colorToHSV(color, hsv)
-        val isGreen = hsv[0] in ColorCalibration.FIELD_GREEN_H_MIN..ColorCalibration.FIELD_GREEN_H_MAX &&
-            hsv[1] >= ColorCalibration.FIELD_S_MIN &&
-            hsv[2] >= ColorCalibration.FIELD_V_MIN
-        val isYellowBrown = hsv[0] in ColorCalibration.FIELD_YELLOW_H_MIN..ColorCalibration.FIELD_YELLOW_H_MAX &&
-            hsv[1] >= ColorCalibration.FIELD_YELLOW_S_MIN &&
-            hsv[2] >= ColorCalibration.FIELD_YELLOW_V_MIN
-        return isGreen || isYellowBrown
-    }
-
-    private fun isFieldLine(color: Int): Boolean {
-        val hsv = FloatArray(3)
-        Color.colorToHSV(color, hsv)
-        return hsv[1] <= 0.18f && hsv[2] >= 0.82f
     }
 }

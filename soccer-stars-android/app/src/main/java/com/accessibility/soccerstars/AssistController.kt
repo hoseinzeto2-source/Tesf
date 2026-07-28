@@ -28,7 +28,7 @@ class AssistController(
         val file = File(physicsPath)
         if (file.exists() && file.length() > 0) PhysicsConfig.load(file) else PhysicsConfig()
     }
-    private val detector = GameDetector(maxShotPower = physicsConfig.maxShotPower)
+    private val detector = GameDetector(context, maxShotPower = physicsConfig.maxShotPower)
     private val physics = PhysicsEngine(FieldBounds(0.0, 0.0, 1.0, 1.0), physicsConfig)
 
     fun process(bitmap: Bitmap, scale: Float): OverlayState =
@@ -144,6 +144,7 @@ class AssistController(
             bluePuckCount = detection.bluePuckCount,
             redPuckCount = detection.redPuckCount,
             analysisNotes = detection.analysisNotes,
+            mapFamily = detection.mapFamily,
         )
     }
 
@@ -163,6 +164,7 @@ class AssistController(
         bluePuckCount = detection.bluePuckCount,
         redPuckCount = detection.redPuckCount,
         analysisNotes = detection.analysisNotes,
+        mapFamily = detection.mapFamily,
     )
 
     private fun fieldRect(bounds: FieldBounds, scale: Float) = RectF(

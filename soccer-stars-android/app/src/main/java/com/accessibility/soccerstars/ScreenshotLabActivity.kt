@@ -89,6 +89,9 @@ class ScreenshotLabActivity : AppCompatActivity() {
         appendLine("وضعیت: ${sceneLabel(state.scenePhase)}")
         appendLine("دقت تشخیص: ${(state.confidence * 100).toInt()}%")
         appendLine("مهره آبی: ${state.bluePuckCount} · مهره قرمز: ${state.redPuckCount}")
+        if (state.mapFamily != null) {
+            appendLine("نوع مپ: ${state.mapFamily}")
+        }
         appendLine()
         appendLine("پیام: ${state.statusText}")
         appendLine()

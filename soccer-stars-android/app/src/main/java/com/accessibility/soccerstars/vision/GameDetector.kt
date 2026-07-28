@@ -1,5 +1,6 @@
 package com.accessibility.soccerstars.vision
 
+import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Color
 import com.accessibility.soccerstars.physics.CircleBody
@@ -31,13 +32,16 @@ data class FrameDetection(
     val bluePuckCount: Int = 0,
     val redPuckCount: Int = 0,
     val analysisNotes: List<String> = emptyList(),
+    val mapFamily: String? = null,
 )
 
 class GameDetector(
+    context: Context,
     private val maxShotPower: Double = 140.0,
 ) {
+    private val colorMatcher = FieldColorMatcher(context)
     private val tracker = DetectionTracker()
-    private val fieldDetector = FieldDetector()
+    private val fieldDetector = FieldDetector(colorMatcher)
 
     fun detect(bitmap: Bitmap): FrameDetection {
         val width = bitmap.width
@@ -87,7 +91,8 @@ class GameDetector(
 
         val blueCount = pucks.count { it.kind == "puck_blue" }
         val redCount = pucks.count { it.kind == "puck_red" }
-        val notes = buildAnalysisNotes(scan, pucks, ball, aim, blueCount, redCount)
+        val mapFamily = colorMatcher.detectMapFamily(bitmap)
+        val notes = buildAnalysisNotes(scan, pucks, ball, aim, blueCount, redCount, mapFamily)
 
         val raw = FrameDetection(
             bounds = bounds,
@@ -100,6 +105,7 @@ class GameDetector(
             bluePuckCount = blueCount,
             redPuckCount = redCount,
             analysisNotes = notes,
+            mapFamily = mapFamily,
         )
         return tracker.smooth(raw, puckRadius, ballRadius)
     }
@@ -145,7 +151,9 @@ class GameDetector(
         aim: AimState,
         blueCount: Int,
         redCount: Int,
+        mapFamily: String?,
     ): List<String> = buildList {
+        mapFamily?.let { add("نوع مپ: $it") }
         add("زمین: ${(scan.centerTurfRatio * 100).toInt()}% · خطوط سفید: ${(scan.whiteLineRatio * 1000).toInt()}/1000")
         add("مهره آبی: $blueCount · مهره قرمز: $redCount")
         if (ball != null) add("توپ: (${ball.x.toInt()}, ${ball.y.toInt()})")
@@ -446,10 +454,7 @@ class GameDetector(
         else -> null
     }
 
-    private fun isBallColor(color: Int): Boolean {
-        val hsv = hsv(color)
-        return hsv[1] <= ColorCalibration.BALL_S_MAX && hsv[2] >= ColorCalibration.BALL_V_MIN
-    }
+    private fun isBallColor(color: Int): Boolean = colorMatcher.isBallColor(color)
 
     private fun isMetalColor(color: Int): Boolean {
         val hsv = hsv(color)
@@ -472,28 +477,9 @@ class GameDetector(
 
     private fun isAimGuideLine(color: Int): Boolean = isYellowLine(color) || isOrangeLine(color)
 
-    private fun isRedTeam(color: Int): Boolean {
-        val hsv = hsv(color)
-        return (hsv[0] <= ColorCalibration.RED_H_MAX || hsv[0] >= ColorCalibration.RED_H_WRAP_MIN) &&
-            hsv[1] >= ColorCalibration.RED_S_MIN &&
-            hsv[2] >= ColorCalibration.RED_V_MIN
-    }
+    private fun isRedTeam(color: Int): Boolean = colorMatcher.isRedTeam(color)
 
-    private fun isBlueTeam(color: Int): Boolean {
-        val hsv = hsv(color)
-        return hsv[0] in ColorCalibration.BLUE_H_MIN..ColorCalibration.BLUE_H_MAX &&
-            hsv[1] >= ColorCalibration.BLUE_S_MIN &&
-            hsv[2] >= ColorCalibration.BLUE_V_MIN
-    }
-
-    private fun isFieldTurf(color: Int): Boolean {
-        val hsv = hsv(color)
-        val isGreen = hsv[0] in ColorCalibration.FIELD_GREEN_H_MIN..ColorCalibration.FIELD_GREEN_H_MAX &&
-            hsv[1] >= ColorCalibration.FIELD_S_MIN && hsv[2] >= ColorCalibration.FIELD_V_MIN
-        val isYellow = hsv[0] in ColorCalibration.FIELD_YELLOW_H_MIN..ColorCalibration.FIELD_YELLOW_H_MAX &&
-            hsv[1] >= ColorCalibration.FIELD_YELLOW_S_MIN && hsv[2] >= ColorCalibration.FIELD_YELLOW_V_MIN
-        return isGreen || isYellow
-    }
+    private fun isBlueTeam(color: Int): Boolean = colorMatcher.isBlueTeam(color)
 
     private fun puckColorBonus(bitmap: Bitmap, cx: Int, cy: Int): Int {
         var bonus = 0

@@ -24,5 +24,6 @@ data class OverlayState(
     val scenePhase: ScenePhase = ScenePhase.UNKNOWN,
     val bluePuckCount: Int = 0,
     val redPuckCount: Int = 0,
+    val mapFamily: String? = null,
     val analysisNotes: List<String> = emptyList(),
 )
