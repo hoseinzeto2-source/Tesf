@@ -257,20 +257,6 @@ class AssistForegroundService : Service() {
     private fun publishFrame(image: android.media.Image) {
         val ctrl = controller ?: return
         val soccerStarsForeground = isSoccerStarsForeground()
-        val accessibilityOn = AccessibilityHelper.isEnabled(this)
-
-        if (accessibilityOn && !soccerStarsForeground) {
-            val pkg = ForegroundAppTracker.currentPackage()
-            val status = AccessibilityHelper.statusLabel(this, pkg)
-            mainHandler.post {
-                overlayController?.applyScene(ScenePhase.MENU_OR_HOME, soccerStarsForeground = false)
-                statusBadge?.statusText = status
-                lastStatusLine = status
-                refreshNotification()
-                processing = false
-            }
-            return
-        }
 
         val full = image.toBitmap()
         val scaled = scaleBitmap(full, processScale)
@@ -285,7 +271,9 @@ class AssistForegroundService : Service() {
         scaled.recycle()
 
         mainHandler.post {
-            val showGameOverlay = soccerStarsForeground || state.scenePhase == ScenePhase.IN_MATCH
+            val showGameOverlay = soccerStarsForeground ||
+                state.scenePhase == ScenePhase.IN_MATCH ||
+                state.confidence >= 0.35f
             overlayController?.applyScene(state.scenePhase, showGameOverlay)
             if (showGameOverlay) {
                 overlayView?.updateState(state)

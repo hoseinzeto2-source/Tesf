@@ -27,19 +27,25 @@ object ColorCalibration {
     const val RED_S_MIN = 0.40f
     const val RED_V_MIN = 0.28f
 
-    // yellow aim guide
+    // yellow aim guide (standard match)
     const val YELLOW_H_MIN = 14f
     const val YELLOW_H_MAX = 55f
     const val YELLOW_S_MIN = 0.30f
     const val YELLOW_V_MIN = 0.40f
 
+    // orange aim arrow (Lucky Shot and minigames)
+    const val ORANGE_H_MIN = 4f
+    const val ORANGE_H_MAX = 38f
+    const val ORANGE_S_MIN = 0.38f
+    const val ORANGE_V_MIN = 0.38f
+
     // Match scene: center crop green ratio (Brazil field texture ≈90%, main menu ≈5%)
-    const val MATCH_CENTER_GREEN_MIN = 0.30f
+    const val MATCH_CENTER_GREEN_MIN = 0.24f
     const val MENU_CENTER_GREEN_MAX = 0.14f
 
-    // Valid play-field geometry (portrait match view)
-    const val FIELD_MIN_HEIGHT_RATIO = 0.42f
-    const val FIELD_MIN_AREA_RATIO = 0.24f
+    // Valid play-field geometry (portrait match view; relaxed for minigames)
+    const val FIELD_MIN_HEIGHT_RATIO = 0.32f
+    const val FIELD_MIN_AREA_RATIO = 0.16f
     const val FIELD_ASPECT_MIN = 0.62f
     const val FIELD_ASPECT_MAX = 1.08f
 }

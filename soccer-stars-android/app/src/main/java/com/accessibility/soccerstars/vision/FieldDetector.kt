@@ -66,7 +66,8 @@ class FieldDetector {
         return when {
             centerGreen >= ColorCalibration.MATCH_CENTER_GREEN_MIN && geometryOk -> ScenePhase.IN_MATCH
             centerGreen < ColorCalibration.MENU_CENTER_GREEN_MAX -> ScenePhase.MENU_OR_HOME
-            geometryOk && centerGreen >= 0.22f -> ScenePhase.IN_MATCH
+            geometryOk && centerGreen >= 0.18f -> ScenePhase.IN_MATCH
+            centerGreen >= 0.22f && areaRatio >= ColorCalibration.FIELD_MIN_AREA_RATIO -> ScenePhase.IN_MATCH
             else -> ScenePhase.UNKNOWN
         }
     }

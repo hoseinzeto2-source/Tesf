@@ -4,18 +4,17 @@
 
 ## دانلود APK
 
-**نسخه 1.1.0 (جدید):** `releases/SoccerStarsAssist-v1.1.0.apk`
+**نسخه 1.1.2 (جدید):** `releases/SoccerStarsAssist-v1.1.2.apk`
 
-لینک مستقیم:
-`https://github.com/hoseinzeto2-source/Tesf/releases/download/v1.1.0/SoccerStarsAssist-v1.1.0.apk`
+`https://github.com/hoseinzeto2-source/Tesf/releases/download/v1.1.2/SoccerStarsAssist-v1.1.2.apk`
 
-### تغییرات v1.1.0
-- **حذف پنجره ImGui** — دیگر صفحه اصلی گوشی قفل نمی‌شود
-- کنترل کامل از **نوتیفیکیشن** (راهنما، دیباگ، تنظیمات، توقف)
-- overlay فقط داخل Soccer Stars نمایش داده می‌شود
-- overlay کاملاً غیرلمسی — لمس صفحه مختل نمی‌شود
+### تغییرات v1.1.2
+- **رفع باگ اصلی:** دیگر پیام «Soccer Stars را باز کنید» وقتی بازی باز است نمایش داده نمی‌شود
+- تشخیص همیشه از روی تصویر صفحه انجام می‌شود (دسترسی‌پذیری دیگر vision را مسدود نمی‌کند)
+- **فلش نارنجی Lucky Shot** و مینی‌گیم‌ها پشتیبانی می‌شود
+- تشخیص مهره و زمین برای مینی‌گیم‌ها بهبود یافت
 
-**نسخه‌های قبلی:** v1.0.6، v1.0.5، ...
+**نسخه 1.1.1:** `releases/SoccerStarsAssist-v1.1.1.apk`
 
 ## نصب
 

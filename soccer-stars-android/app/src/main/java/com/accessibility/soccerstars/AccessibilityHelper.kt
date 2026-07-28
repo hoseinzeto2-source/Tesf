@@ -114,7 +114,7 @@ object AccessibilityHelper {
         if (packageName == null) {
             return context.getString(R.string.status_waiting_game)
         }
-        if (packageName == ForegroundAppTracker.SOCCER_STARS_PACKAGE) {
+        if (ForegroundAppTracker.isSoccerStarsPackage(packageName)) {
             return context.getString(R.string.status_in_game)
         }
         if (ForegroundAppTracker.isLauncherPackage(packageName)) {
