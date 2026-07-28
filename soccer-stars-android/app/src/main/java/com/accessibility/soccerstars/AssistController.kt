@@ -10,6 +10,7 @@ import com.accessibility.soccerstars.physics.PhysicsConfig
 import com.accessibility.soccerstars.physics.PhysicsEngine
 import com.accessibility.soccerstars.physics.ShotInput
 import com.accessibility.soccerstars.vision.FrameDetection
+import com.accessibility.soccerstars.vision.FramePairAnalyzer
 import com.accessibility.soccerstars.vision.GameDetector
 import com.accessibility.soccerstars.vision.ScenePhase
 import java.io.File
@@ -29,7 +30,36 @@ class AssistController(
         if (file.exists() && file.length() > 0) PhysicsConfig.load(file) else PhysicsConfig()
     }
     private val detector = GameDetector(context, maxShotPower = physicsConfig.maxShotPower)
+    private val pairAnalyzer = FramePairAnalyzer(detector)
     private val physics = PhysicsEngine(FieldBounds(0.0, 0.0, 1.0, 1.0), physicsConfig)
+
+    fun analyzePair(before: Bitmap, after: Bitmap): PairAnalysisState {
+        val result = pairAnalyzer.analyze(before, after)
+        val report = pairAnalyzer.formatReport(result)
+        val shooter = result.shooter
+
+        val overlay = if (shooter != null && result.before.aim.active) {
+            process(before, 1f).copy(
+                statusText = "تحلیل جفت عکس — مهره ${if (shooter.team == "blue") "آبی" else "قرمز"} ${shooter.distance.toInt()}px جابجا شد",
+            )
+        } else {
+            buildState(result.before, 1f, assistEnabled = false).copy(
+                statusText = "تحلیل جفت عکس — ${result.puckMovements.count { it.matched && it.distance > 15f }} مهره جابجا شد",
+            )
+        }
+
+        return PairAnalysisState(
+            result = result,
+            report = report,
+            overlay = overlay,
+        )
+    }
+
+    data class PairAnalysisState(
+        val result: FramePairAnalyzer.PairAnalysisResult,
+        val report: String,
+        val overlay: OverlayState,
+    )
 
     fun process(bitmap: Bitmap, scale: Float): OverlayState =
         buildState(detector.detect(bitmap), scale, assistEnabled = true)

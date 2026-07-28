@@ -28,20 +28,36 @@
             android:text="@string/lab_subtitle" />
 
         <com.google.android.material.button.MaterialButton
-            android:id="@+id/pickImageButton"
+            android:id="@+id/pickBeforeButton"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="16dp"
-            android:text="@string/lab_pick_image" />
+            android:text="@string/lab_pick_before" />
 
         <com.google.android.material.button.MaterialButton
-            android:id="@+id/analyzeButton"
+            android:id="@+id/pickAfterButton"
             style="@style/Widget.MaterialComponents.Button.OutlinedButton"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
+            android:text="@string/lab_pick_after" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/analyzePairButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
             android:enabled="false"
-            android:text="@string/lab_analyze" />
+            android:text="@string/lab_analyze_pair" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/analyzeButton"
+            style="@style/Widget.MaterialComponents.Button.TextButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:enabled="false"
+            android:text="@string/lab_analyze_single" />
 
         <com.google.android.material.card.MaterialCardView
             style="@style/Widget.Assist.Card"

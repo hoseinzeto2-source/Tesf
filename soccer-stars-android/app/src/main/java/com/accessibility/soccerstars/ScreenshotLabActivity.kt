@@ -17,14 +17,16 @@ import kotlinx.coroutines.withContext
 
 class ScreenshotLabActivity : AppCompatActivity() {
     private lateinit var binding: ActivityScreenshotLabBinding
-    private var sourceBitmap: Bitmap? = null
+    private var beforeBitmap: Bitmap? = null
+    private var afterBitmap: Bitmap? = null
     private var controller: AssistController? = null
+    private var pickingBefore = true
 
     private val pickImage = registerForActivityResult(
         ActivityResultContracts.GetContent(),
     ) { uri ->
         if (uri == null) return@registerForActivityResult
-        loadImage(uri)
+        loadImage(uri, pickingBefore)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -42,13 +44,22 @@ class ScreenshotLabActivity : AppCompatActivity() {
             showLegend = true,
         )
 
-        binding.pickImageButton.setOnClickListener { pickImage.launch("image/*") }
-        binding.analyzeButton.setOnClickListener { analyzeCurrentImage() }
+        binding.pickBeforeButton.setOnClickListener {
+            pickingBefore = true
+            pickImage.launch("image/*")
+        }
+        binding.pickAfterButton.setOnClickListener {
+            pickingBefore = false
+            pickImage.launch("image/*")
+        }
+        binding.analyzePairButton.setOnClickListener { analyzePair() }
+        binding.analyzeButton.setOnClickListener { analyzeSingle() }
 
-        intent?.data?.let { loadImage(it) }
+        updateButtons()
+        intent?.data?.let { loadImage(it, true) }
     }
 
-    private fun loadImage(uri: Uri) {
+    private fun loadImage(uri: Uri, isBefore: Boolean) {
         lifecycleScope.launch {
             val bitmap = withContext(Dispatchers.IO) {
                 contentResolver.openInputStream(uri)?.use { stream ->
@@ -59,18 +70,35 @@ class ScreenshotLabActivity : AppCompatActivity() {
                 Toast.makeText(this@ScreenshotLabActivity, R.string.lab_load_failed, Toast.LENGTH_SHORT).show()
                 return@launch
             }
-            sourceBitmap?.recycle()
-            sourceBitmap = bitmap
-            binding.labPreview.setImage(bitmap)
-            binding.analyzeButton.isEnabled = true
-            binding.resultText.text = getString(R.string.lab_image_loaded)
+
+            if (isBefore) {
+                beforeBitmap?.recycle()
+                beforeBitmap = bitmap
+                binding.labPreview.setImage(bitmap)
+                binding.resultText.text = getString(R.string.lab_before_loaded)
+            } else {
+                afterBitmap?.recycle()
+                afterBitmap = bitmap
+                binding.resultText.text = getString(R.string.lab_after_loaded)
+            }
+
+            updateButtons()
+            if (beforeBitmap != null && afterBitmap != null) {
+                binding.resultText.text = getString(R.string.lab_both_loaded)
+            }
         }
     }
 
-    private fun analyzeCurrentImage() {
-        val bitmap = sourceBitmap ?: return
+    private fun updateButtons() {
+        binding.analyzeButton.isEnabled = beforeBitmap != null
+        binding.analyzePairButton.isEnabled = beforeBitmap != null && afterBitmap != null
+    }
+
+    private fun analyzeSingle() {
+        val bitmap = beforeBitmap ?: return
         val ctrl = controller ?: return
         binding.analyzeButton.isEnabled = false
+        binding.analyzePairButton.isEnabled = false
         binding.resultText.text = getString(R.string.lab_analyzing)
 
         lifecycleScope.launch {
@@ -78,13 +106,33 @@ class ScreenshotLabActivity : AppCompatActivity() {
                 ctrl.analyzeFrame(bitmap)
             }
             binding.labPreview.setAnalysis(result)
-            binding.resultText.text = formatResult(result)
-            binding.analyzeButton.isEnabled = true
+            binding.resultText.text = formatSingleResult(result)
+            updateButtons()
         }
     }
 
-    private fun formatResult(state: OverlayState): String = buildString {
-        appendLine("═══ گزارش تحلیل هوش مصنوعی ═══")
+    private fun analyzePair() {
+        val before = beforeBitmap ?: return
+        val after = afterBitmap ?: return
+        val ctrl = controller ?: return
+        binding.analyzeButton.isEnabled = false
+        binding.analyzePairButton.isEnabled = false
+        binding.resultText.text = getString(R.string.lab_analyzing)
+
+        lifecycleScope.launch {
+            val pairState = withContext(Dispatchers.Default) {
+                ctrl.analyzePair(before, after)
+            }
+            binding.labPreview.setImage(before)
+            binding.labPreview.setPairAnalysis(pairState.result)
+            binding.labPreview.setAnalysis(pairState.overlay)
+            binding.resultText.text = pairState.report
+            updateButtons()
+        }
+    }
+
+    private fun formatSingleResult(state: OverlayState): String = buildString {
+        appendLine("═══ گزارش تحلیل تک‌عکس ═══")
         appendLine()
         appendLine("وضعیت: ${sceneLabel(state.scenePhase)}")
         appendLine("دقت تشخیص: ${(state.confidence * 100).toInt()}%")
@@ -94,12 +142,6 @@ class ScreenshotLabActivity : AppCompatActivity() {
         }
         appendLine()
         appendLine("پیام: ${state.statusText}")
-        if (state.analysisNotes.any { it.contains("بعد از شلیک") }) {
-            appendLine()
-            appendLine("── تحلیل بعد از شلیک ──")
-            state.analysisNotes.filter { it.contains("سرعت") || it.contains("بعد از شلیک") || it.contains("حرکت") }
-                .forEach { appendLine(it) }
-        }
         appendLine()
         if (state.finalBallPoint != null) {
             appendLine("🎯 مقصد نهایی توپ:")
@@ -109,19 +151,13 @@ class ScreenshotLabActivity : AppCompatActivity() {
         } else if (state.active) {
             appendLine("مسیر توپ محاسبه شد (${state.ballPath.size} نقطه)")
         } else {
-            appendLine("⚠️ شلیک فعال نیست — عکس باید هنگام کشیدن مهره باشد")
-        }
-        appendLine()
-        if (state.enemyPuckPaths.isNotEmpty()) {
-            appendLine("مسیر مهره‌های حریف: ${state.enemyPuckPaths.size} مهره")
+            appendLine("💡 برای دقت بیشتر، عکس «بعد شلیک» را هم اضافه کنید")
         }
         if (state.analysisNotes.isNotEmpty()) {
             appendLine()
             appendLine("جزئیات:")
             state.analysisNotes.forEach { appendLine("• $it") }
         }
-        appendLine()
-        appendLine("راهنما: عکس‌های قبل/بعد شلیک را اینجا تست کنید تا تشخیص بهتر شود.")
     }
 
     private fun sceneLabel(phase: ScenePhase): String = when (phase) {
@@ -131,8 +167,10 @@ class ScreenshotLabActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
-        sourceBitmap?.recycle()
-        sourceBitmap = null
+        beforeBitmap?.recycle()
+        afterBitmap?.recycle()
+        beforeBitmap = null
+        afterBitmap = null
         super.onDestroy()
     }
 }

@@ -9,6 +9,7 @@ import android.graphics.Path
 import android.graphics.PointF
 import android.util.AttributeSet
 import android.view.View
+import com.accessibility.soccerstars.vision.FramePairAnalyzer
 
 /**
  * Draws a screenshot with analysis overlay for the Lab screen.
@@ -19,6 +20,7 @@ class LabPreviewView @JvmOverloads constructor(
 ) : View(context, attrs) {
     private var bitmap: Bitmap? = null
     private var state = OverlayState()
+    private var pairResult: FramePairAnalyzer.PairAnalysisResult? = null
 
     private val rulerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = 0xF0FFFFFF.toInt()
@@ -65,13 +67,31 @@ class LabPreviewView @JvmOverloads constructor(
         style = Paint.Style.STROKE
     }
 
+    private val shooterPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = 0xFFFFD700.toInt()
+        strokeWidth = 4f
+        style = Paint.Style.STROKE
+    }
+
+    private val movePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = 0xCCFFFFFF.toInt()
+        strokeWidth = 3f
+        style = Paint.Style.STROKE
+    }
+
     fun setImage(source: Bitmap?) {
         bitmap = source
+        pairResult = null
         invalidate()
     }
 
     fun setAnalysis(result: OverlayState) {
         state = result
+        invalidate()
+    }
+
+    fun setPairAnalysis(result: FramePairAnalyzer.PairAnalysisResult) {
+        pairResult = result
         invalidate()
     }
 
@@ -117,6 +137,25 @@ class LabPreviewView @JvmOverloads constructor(
         }
         state.debugBall?.let { canvas.drawCircle(it.x, it.y, 12f, goalPaint) }
         state.debugField?.let { canvas.drawRect(it, debugBlue) }
+
+        pairResult?.let { pair ->
+            for (move in pair.puckMovements) {
+                if (!move.matched || move.distance < 2f) continue
+                val paint = when (move.team) {
+                    "blue" -> debugBlue
+                    "red" -> debugRed
+                    else -> movePaint
+                }
+                canvas.drawCircle(move.before.x, move.before.y, move.beforeRadius, paint)
+                canvas.drawCircle(move.after.x, move.after.y, move.afterRadius, paint)
+                canvas.drawLine(move.before.x, move.before.y, move.after.x, move.after.y, movePaint)
+            }
+            pair.shooter?.let {
+                canvas.drawCircle(it.after.x, it.after.y, it.afterRadius + 6f, shooterPaint)
+            }
+            pair.ballMovement?.before?.let { canvas.drawCircle(it.x, it.y, 10f, ballPaint) }
+            pair.ballMovement?.after?.let { canvas.drawCircle(it.x, it.y, 10f, goalPaint) }
+        }
 
         canvas.restore()
     }

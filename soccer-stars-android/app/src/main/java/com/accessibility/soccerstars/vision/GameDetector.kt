@@ -47,6 +47,52 @@ class GameDetector(
     private val tracker = DetectionTracker()
     private val fieldDetector = FieldDetector(colorMatcher)
 
+    /**
+     * Lab/offline analysis: always scan the play area and skip temporal smoothing.
+     */
+    fun analyzeGameplay(bitmap: Bitmap): FrameDetection {
+        val width = bitmap.width
+        val height = bitmap.height
+        val scan = fieldDetector.scan(bitmap)
+        val bounds = scan.bounds ?: fieldDetector.fullScreenBounds(width, height)
+        val playArea = fieldDetector.playArea(bounds)
+        val scale = ((bounds.right - bounds.left) / 360.0).coerceIn(0.55, 1.8)
+        val puckRadius = 22.0 * scale
+        val ballRadius = 12.0 * scale
+
+        val ball = detectBall(bitmap, playArea, ballRadius)
+        val pucks = detectPucks(bitmap, playArea, ball, puckRadius, strictRed = isBrownField(scan, bitmap))
+        val aim = detectAimLine(bitmap, playArea, pucks, maxShotPower)
+        val motions = if (!aim.active && pucks.size >= 4) {
+            motionDetector.detect(bitmap, pucks)
+        } else {
+            emptyList()
+        }
+        val isPostShot = !aim.active && motions.isNotEmpty()
+        val blueCount = pucks.count { it.kind == "puck_blue" }
+        val redCount = pucks.count { it.kind == "puck_red" }
+        val mapFamily = colorMatcher.detectMapFamily(bitmap)
+        val scene = inferGameplayScene(pucks, ball, scan) ?: ScenePhase.IN_MATCH
+
+        return FrameDetection(
+            bounds = bounds,
+            ball = ball,
+            pucks = pucks,
+            aim = aim,
+            confidence = scoreConfidence(scan, ball, pucks, aim),
+            scene = scene,
+            centerGreenRatio = scan.centerTurfRatio,
+            bluePuckCount = blueCount,
+            redPuckCount = redCount,
+            analysisNotes = buildAnalysisNotes(
+                scan, pucks, ball, aim, blueCount, redCount, mapFamily, motions, isPostShot,
+            ),
+            mapFamily = mapFamily,
+            postShotMotions = motions,
+            isPostShot = isPostShot,
+        )
+    }
+
     fun detect(bitmap: Bitmap): FrameDetection {
         val width = bitmap.width
         val height = bitmap.height
@@ -62,7 +108,7 @@ class GameDetector(
             val puckRadius = 22.0 * scale
             val ballRadius = 12.0 * scale
             val ball = detectBall(bitmap, playArea, ballRadius)
-            val pucks = detectPucks(bitmap, playArea, ball, puckRadius)
+            val pucks = detectPucks(bitmap, playArea, ball, puckRadius, isBrownField(scan, bitmap))
             val gameplay = inferGameplayScene(pucks, ball, scan)
             if (gameplay != null) {
                 bounds = fullBounds
@@ -90,7 +136,8 @@ class GameDetector(
         val ballRadius = 12.0 * scale
 
         val ball = detectBall(bitmap, playArea, ballRadius)
-        val pucks = detectPucks(bitmap, playArea, ball, puckRadius)
+        val strictRed = isBrownField(scan, bitmap)
+        val pucks = detectPucks(bitmap, playArea, ball, puckRadius, strictRed)
         val aim = detectAimLine(bitmap, playArea, pucks, maxShotPower)
 
         val motions = if (!aim.active && pucks.size >= 4) motionDetector.detect(bitmap, pucks) else emptyList()
@@ -226,11 +273,18 @@ class GameDetector(
         }
     }
 
+    private fun isBrownField(scan: FieldScan, bitmap: Bitmap): Boolean {
+        val family = colorMatcher.detectMapFamily(bitmap)
+        if (family == "street" || family == "yellow_brown") return true
+        return scan.centerTurfRatio >= 0.08f && scan.whiteLineRatio < 0.02f
+    }
+
     private fun detectPucks(
         bitmap: Bitmap,
         area: FieldBounds,
         ball: CircleBody?,
         radius: Double,
+        strictRed: Boolean = false,
     ): List<CircleBody> {
         val candidates = mutableListOf<PuckValidator.ScoredPuck>()
         val step = max(4, (radius / 2.0).toInt())
@@ -246,7 +300,8 @@ class GameDetector(
                     }
                     if (refined != null) {
                         val score = puckValidator.scoreCandidate(bitmap, refined.x, refined.y, refined.radius, team)
-                        if (score >= 42) {
+                        val minScore = if (strictRed && team == "red") 58 else 42
+                        if (score >= minScore) {
                             candidates += PuckValidator.ScoredPuck(
                                 refined.x, refined.y, refined.radius, team, score + refined.score,
                             )
