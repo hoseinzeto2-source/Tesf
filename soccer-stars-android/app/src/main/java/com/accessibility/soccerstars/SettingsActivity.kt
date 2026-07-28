@@ -21,6 +21,7 @@ class SettingsActivity : AppCompatActivity() {
         binding.rulerSlider.value = ruler
         binding.scaleSlider.value = scale
         binding.showPuckSwitch.isChecked = AppPreferences.showPuckPath(this)
+        binding.showEnemySwitch.isChecked = AppPreferences.showEnemyPaths(this)
         binding.showLegendSwitch.isChecked = AppPreferences.showLegend(this)
         binding.showDebugSwitch.isChecked = AppPreferences.showDebug(this)
         binding.physicsPathText.text = PhysicsStorage.displayPath(this)
@@ -39,6 +40,7 @@ class SettingsActivity : AppCompatActivity() {
                 context = this,
                 rulerExtension = binding.rulerSlider.value,
                 showPuckPath = binding.showPuckSwitch.isChecked,
+                showEnemyPaths = binding.showEnemySwitch.isChecked,
                 showLegend = binding.showLegendSwitch.isChecked,
                 processScale = binding.scaleSlider.value,
                 showDebug = binding.showDebugSwitch.isChecked,

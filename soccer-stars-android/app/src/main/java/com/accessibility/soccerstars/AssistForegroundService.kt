@@ -101,6 +101,8 @@ class AssistForegroundService : Service() {
             physicsPath = PhysicsStorage.physicsFile(applicationContext).absolutePath,
             rulerExtensionPx = AppPreferences.rulerExtension(this),
             showPuckPath = AppPreferences.showPuckPath(this),
+            showEnemyPaths = AppPreferences.showEnemyPaths(this),
+            showLegend = AppPreferences.showLegend(this),
         )
 
         startForeground(

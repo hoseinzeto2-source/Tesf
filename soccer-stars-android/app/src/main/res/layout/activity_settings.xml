@@ -111,6 +111,13 @@
                     android:textColor="@color/text_primary" />
 
                 <com.google.android.material.switchmaterial.SwitchMaterial
+                    android:id="@+id/showEnemySwitch"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="نمایش مسیر مهره‌های حریف"
+                    android:textColor="@color/text_primary" />
+
+                <com.google.android.material.switchmaterial.SwitchMaterial
                     android:id="@+id/showLegendSwitch"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"

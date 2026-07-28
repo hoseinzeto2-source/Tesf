@@ -8,6 +8,7 @@ object AppPreferences {
     private const val PREFS = "soccer_stars_assist_prefs"
     private const val KEY_RULER = "ruler_extension"
     private const val KEY_SHOW_PUCK = "show_puck_path"
+    private const val KEY_SHOW_ENEMY = "show_enemy_paths"
     private const val KEY_SHOW_LEGEND = "show_legend"
     private const val KEY_PROCESS_SCALE = "process_scale"
     private const val KEY_SHOW_DEBUG = "show_debug"
@@ -19,19 +20,22 @@ object AppPreferences {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
     fun rulerExtension(context: Context): Double =
-        prefs(context).getFloat(KEY_RULER, 280f).toDouble()
+        prefs(context).getFloat(KEY_RULER, 380f).toDouble()
 
     fun showPuckPath(context: Context): Boolean =
         prefs(context).getBoolean(KEY_SHOW_PUCK, true)
+
+    fun showEnemyPaths(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_SHOW_ENEMY, true)
 
     fun showLegend(context: Context): Boolean =
         prefs(context).getBoolean(KEY_SHOW_LEGEND, true)
 
     fun processScale(context: Context): Float =
-        prefs(context).getFloat(KEY_PROCESS_SCALE, 0.55f).coerceIn(0.25f, 1.0f)
+        prefs(context).getFloat(KEY_PROCESS_SCALE, 0.85f).coerceIn(0.25f, 1.0f)
 
     fun showDebug(context: Context): Boolean =
-        prefs(context).getBoolean(KEY_SHOW_DEBUG, false)
+        prefs(context).getBoolean(KEY_SHOW_DEBUG, true)
 
     fun assistEnabled(context: Context): Boolean =
         prefs(context).getBoolean(KEY_ASSIST_ENABLED, true)
@@ -57,6 +61,7 @@ object AppPreferences {
         context: Context,
         rulerExtension: Float,
         showPuckPath: Boolean,
+        showEnemyPaths: Boolean,
         showLegend: Boolean,
         processScale: Float,
         showDebug: Boolean = showDebug(context),
@@ -64,6 +69,7 @@ object AppPreferences {
         prefs(context).edit()
             .putFloat(KEY_RULER, rulerExtension)
             .putBoolean(KEY_SHOW_PUCK, showPuckPath)
+            .putBoolean(KEY_SHOW_ENEMY, showEnemyPaths)
             .putBoolean(KEY_SHOW_LEGEND, showLegend)
             .putFloat(KEY_PROCESS_SCALE, processScale)
             .putBoolean(KEY_SHOW_DEBUG, showDebug)

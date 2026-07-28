@@ -17,10 +17,12 @@ import kotlin.math.hypot
 import kotlin.math.min
 
 class AssistController(
-    private val context: Context,
+    context: Context,
     physicsPath: String,
-    private val rulerExtensionPx: Double = 280.0,
+    private val rulerExtensionPx: Double = 380.0,
     private val showPuckPath: Boolean = true,
+    private val showEnemyPaths: Boolean = true,
+    private val showLegend: Boolean = true,
 ) {
     private val physicsConfig: PhysicsConfig = run {
         val file = File(physicsPath)
@@ -29,10 +31,17 @@ class AssistController(
     private val detector = GameDetector(maxShotPower = physicsConfig.maxShotPower)
     private val physics = PhysicsEngine(FieldBounds(0.0, 0.0, 1.0, 1.0), physicsConfig)
 
-    fun process(bitmap: Bitmap, scale: Float): OverlayState {
-        val detection = detector.detect(bitmap)
+    fun process(bitmap: Bitmap, scale: Float): OverlayState =
+        buildState(detector.detect(bitmap), scale, assistEnabled = true)
 
-        if (detection.scene == ScenePhase.MENU_OR_HOME) {
+    fun detectOnly(bitmap: Bitmap, scale: Float): OverlayState =
+        buildState(detector.detect(bitmap), scale, assistEnabled = false)
+
+    fun analyzeFrame(bitmap: Bitmap): OverlayState =
+        process(bitmap, 1f)
+
+    private fun buildState(detection: FrameDetection, scale: Float, assistEnabled: Boolean): OverlayState {
+        if (detection.scene == ScenePhase.MENU_OR_HOME && detection.pucks.size < 2) {
             return idle(
                 "صفحه اصلی یا منو — وارد مسابقه Soccer Stars شوید",
                 detection,
@@ -48,12 +57,22 @@ class AssistController(
         val scaledBounds = scaleBounds(bounds, scale)
         physics.bounds = scaledBounds
 
-        if (!detection.aim.active) {
-            return idle("مهره را بگیرید و بکشید", detection, scale)
+        if (!assistEnabled) {
+            return idle("راهنما خاموش است — از نوار اعلان روشن کنید", detection, scale)
         }
 
-        val shooter = detector.nearestPuckToAim(detection) ?: return idle("مهره را بگیرید و بکشید", detection, scale)
-        val ball = detection.ball ?: return idle("توپ پیدا نشد — کیفیت تشخیص را بالا ببرید", detection, scale)
+        if (!detection.aim.active) {
+            return idle(
+                "مهره را بگیرید و بکشید · آبی:${detection.bluePuckCount} قرمز:${detection.redPuckCount}",
+                detection,
+                scale,
+            )
+        }
+
+        val shooter = detector.nearestPuckToAim(detection)
+            ?: return idle("مهره را بگیرید و بکشید", detection, scale)
+        val ball = detection.ball
+            ?: return idle("توپ پیدا نشد — کیفیت تشخیص را بالا ببرید", detection, scale)
 
         val shot = ShotInput(
             puckId = shooter.id,
@@ -78,11 +97,16 @@ class AssistController(
         val powerPercent = ((detection.aim.power / physicsConfig.maxShotPower) * 100)
             .toInt().coerceIn(0, 100)
 
+        val enemyCount = detection.pucks.count { it.id != shooter.id }
         val status = when {
-            result.goalScored -> "احتمال گل!"
+            result.goalScored -> "احتمال گل! · $enemyCount مهره حریف در محاسبه"
             powerPercent > 88 -> "قدرت زیاد — آرام‌تر بکشید"
             powerPercent < 15 -> "قدرت کم — بیشتر بکشید"
-            else -> "مسیر توپ آماده است"
+            else -> "مقصد توپ: (${result.finalBallPosition?.first?.toInt()}, ${result.finalBallPosition?.second?.toInt()})"
+        }
+
+        val finalBall = result.finalBallPosition?.let {
+            PointF((it.first * scale).toFloat(), (it.second * scale).toFloat())
         }
 
         return OverlayState(
@@ -97,40 +121,48 @@ class AssistController(
             ballPath = result.ballPath.map {
                 PointF((it.first * scale).toFloat(), (it.second * scale).toFloat())
             },
+            enemyPuckPaths = if (showEnemyPaths) {
+                result.enemyPuckPaths.values.map { path ->
+                    path.map { PointF((it.first * scale).toFloat(), (it.second * scale).toFloat()) }
+                }
+            } else {
+                emptyList()
+            },
             goalPoint = result.ballPath.lastOrNull()?.let {
                 PointF((it.first * scale).toFloat(), (it.second * scale).toFloat())
             },
+            finalBallPoint = finalBall,
             goalScored = result.goalScored,
             powerPercent = powerPercent,
-            showLegend = true,
+            showLegend = showLegend,
             confidence = detection.confidence,
             debugPucks = detection.pucks.map { PointF((it.x * scale).toFloat(), (it.y * scale).toFloat()) },
-            debugBall = detection.ball?.let { PointF((it.x * scale).toFloat(), (it.y * scale).toFloat()) },
+            debugPuckTeams = detection.pucks.map { it.kind.removePrefix("puck_") },
+            debugBall = PointF((ball.x * scale).toFloat(), (ball.y * scale).toFloat()),
             debugField = fieldRect(bounds, scale),
             scenePhase = detection.scene,
+            bluePuckCount = detection.bluePuckCount,
+            redPuckCount = detection.redPuckCount,
+            analysisNotes = detection.analysisNotes,
         )
-    }
-
-    fun detectOnly(bitmap: Bitmap, scale: Float): OverlayState {
-        return idle("راهنما خاموش است — از منو روشن کنید", detector.detect(bitmap), scale)
     }
 
     private fun idle(message: String, detection: FrameDetection, scale: Float) = OverlayState(
         active = false,
         statusText = message,
         confidence = detection.confidence,
-        debugPucks = if (detection.scene == ScenePhase.IN_MATCH) {
+        debugPucks = if (detection.scene != ScenePhase.MENU_OR_HOME || detection.pucks.isNotEmpty()) {
             detection.pucks.map { PointF((it.x * scale).toFloat(), (it.y * scale).toFloat()) }
         } else {
             emptyList()
         },
-        debugBall = if (detection.scene == ScenePhase.IN_MATCH) {
-            detection.ball?.let { PointF((it.x * scale).toFloat(), (it.y * scale).toFloat()) }
-        } else {
-            null
-        },
+        debugPuckTeams = detection.pucks.map { it.kind.removePrefix("puck_") },
+        debugBall = detection.ball?.let { PointF((it.x * scale).toFloat(), (it.y * scale).toFloat()) },
         debugField = detection.bounds?.let { fieldRect(it, scale) },
         scenePhase = detection.scene,
+        bluePuckCount = detection.bluePuckCount,
+        redPuckCount = detection.redPuckCount,
+        analysisNotes = detection.analysisNotes,
     )
 
     private fun fieldRect(bounds: FieldBounds, scale: Float) = RectF(
@@ -165,11 +197,11 @@ class AssistController(
     }
 
     private fun goalRect(bounds: FieldBounds, shooter: CircleBody, ball: CircleBody): DoubleArray {
-        val top = bounds.top + (bounds.bottom - bounds.top) * 0.38
-        val bottom = bounds.top + (bounds.bottom - bounds.top) * 0.62
+        val top = bounds.top + (bounds.bottom - bounds.top) * 0.36
+        val bottom = bounds.top + (bounds.bottom - bounds.top) * 0.64
         val margin = 10.0 * (bounds.right - bounds.left) / 400.0
-        val shootUp = ball.y < shooter.y
-        return if (shootUp) {
+        val shootLeft = ball.x < (bounds.left + bounds.right) / 2
+        return if (shootLeft) {
             doubleArrayOf(bounds.left + margin, top, bounds.left + margin * 4, bottom)
         } else {
             doubleArrayOf(bounds.right - margin * 4, top, bounds.right - margin, bottom)
@@ -188,8 +220,8 @@ class AssistController(
 
         val ux = dirX / length
         val uy = dirY / length
-        val total = min(rulerExtensionPx, 90.0 + power * 1.8)
-        val steps = maxOf(2, (total / 18.0).toInt())
+        val total = min(rulerExtensionPx, 100.0 + power * 2.0)
+        val steps = maxOf(2, (total / 16.0).toInt())
 
         return (0..steps).map { i ->
             val dist = (total / steps) * i

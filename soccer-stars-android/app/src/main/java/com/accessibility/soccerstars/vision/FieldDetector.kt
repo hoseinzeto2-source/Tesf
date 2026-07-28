@@ -11,44 +11,63 @@ data class FieldScan(
     val scene: ScenePhase,
     val centerGreenRatio: Float,
     val fieldAreaRatio: Float,
+    val centerTurfRatio: Float = centerGreenRatio,
+    val whiteLineRatio: Float = 0f,
 )
 
 class FieldDetector {
     fun scan(bitmap: Bitmap): FieldScan {
         val width = bitmap.width
         val height = bitmap.height
-        val centerGreen = measureCenterGreen(bitmap, width, height)
+        val centerTurf = measureCenterTurf(bitmap, width, height)
+        val whiteLines = measureWhiteLines(bitmap, width, height)
         val bounds = detectPlayField(bitmap, width, height)
         val areaRatio = bounds?.let {
             ((it.right - it.left) * (it.bottom - it.top) / (width * height)).toFloat()
         } ?: 0f
 
-        val scene = classifyScene(centerGreen, bounds, areaRatio, width, height)
+        val scene = classifyScene(centerTurf, whiteLines, bounds, areaRatio, height)
         val finalBounds = if (scene == ScenePhase.IN_MATCH) bounds else null
-        return FieldScan(finalBounds, scene, centerGreen, areaRatio)
+        return FieldScan(
+            bounds = finalBounds,
+            scene = scene,
+            centerGreenRatio = centerTurf,
+            fieldAreaRatio = areaRatio,
+            centerTurfRatio = centerTurf,
+            whiteLineRatio = whiteLines,
+        )
     }
 
     fun playArea(bounds: FieldBounds): FieldBounds {
         val h = bounds.bottom - bounds.top
         val w = bounds.right - bounds.left
         return FieldBounds(
-            left = bounds.left + w * 0.04,
-            top = bounds.top + h * 0.10,
-            right = bounds.right - w * 0.04,
-            bottom = bounds.bottom - h * 0.08,
+            left = bounds.left + w * 0.03,
+            top = bounds.top + h * 0.08,
+            right = bounds.right - w * 0.03,
+            bottom = bounds.bottom - h * 0.06,
         )
     }
 
+    fun fullScreenBounds(width: Int, height: Int): FieldBounds = FieldBounds(
+        left = width * 0.02,
+        top = height * 0.06,
+        right = width * 0.98,
+        bottom = height * 0.96,
+    )
+
     private fun classifyScene(
-        centerGreen: Float,
+        centerTurf: Float,
+        whiteLineRatio: Float,
         bounds: FieldBounds?,
         areaRatio: Float,
-        width: Int,
         height: Int,
     ): ScenePhase {
         if (bounds == null) {
-            return if (centerGreen < ColorCalibration.MENU_CENTER_GREEN_MAX) {
+            return if (centerTurf < ColorCalibration.MENU_CENTER_FIELD_MAX && whiteLineRatio < 0.01f) {
                 ScenePhase.MENU_OR_HOME
+            } else if (centerTurf >= ColorCalibration.MATCH_CENTER_FIELD_MIN || whiteLineRatio >= 0.012f) {
+                ScenePhase.IN_MATCH
             } else {
                 ScenePhase.UNKNOWN
             }
@@ -64,54 +83,78 @@ class FieldDetector {
             aspect in ColorCalibration.FIELD_ASPECT_MIN..ColorCalibration.FIELD_ASPECT_MAX
 
         return when {
-            centerGreen >= ColorCalibration.MATCH_CENTER_GREEN_MIN && geometryOk -> ScenePhase.IN_MATCH
-            centerGreen < ColorCalibration.MENU_CENTER_GREEN_MAX -> ScenePhase.MENU_OR_HOME
-            geometryOk && centerGreen >= 0.18f -> ScenePhase.IN_MATCH
-            centerGreen >= 0.22f && areaRatio >= ColorCalibration.FIELD_MIN_AREA_RATIO -> ScenePhase.IN_MATCH
+            geometryOk && (centerTurf >= ColorCalibration.MATCH_CENTER_FIELD_MIN || whiteLineRatio >= 0.01f) ->
+                ScenePhase.IN_MATCH
+            centerTurf < ColorCalibration.MENU_CENTER_FIELD_MAX && whiteLineRatio < 0.008f ->
+                ScenePhase.MENU_OR_HOME
+            geometryOk -> ScenePhase.IN_MATCH
+            centerTurf >= 0.12f && areaRatio >= ColorCalibration.FIELD_MIN_AREA_RATIO ->
+                ScenePhase.IN_MATCH
             else -> ScenePhase.UNKNOWN
         }
     }
 
-    private fun measureCenterGreen(bitmap: Bitmap, width: Int, height: Int): Float {
-        val left = (width * 0.15).toInt()
-        val right = (width * 0.85).toInt()
-        val top = (height * 0.12).toInt()
-        val bottom = (height * 0.88).toInt()
-        val step = max(3, width / 100)
-        var green = 0
+    private fun measureCenterTurf(bitmap: Bitmap, width: Int, height: Int): Float {
+        val left = (width * 0.12).toInt()
+        val right = (width * 0.88).toInt()
+        val top = (height * 0.10).toInt()
+        val bottom = (height * 0.90).toInt()
+        val step = max(3, width / 90)
+        var turf = 0
         var total = 0
         var y = top
         while (y < bottom) {
             var x = left
             while (x < right) {
                 total++
-                if (isFieldGreen(bitmap.getPixel(x, y))) green++
+                if (isFieldTurf(bitmap.getPixel(x, y))) turf++
                 x += step
             }
             y += step
         }
-        return if (total == 0) 0f else green.toFloat() / total
+        return if (total == 0) 0f else turf.toFloat() / total
+    }
+
+    private fun measureWhiteLines(bitmap: Bitmap, width: Int, height: Int): Float {
+        val left = (width * 0.10).toInt()
+        val right = (width * 0.90).toInt()
+        val top = (height * 0.12).toInt()
+        val bottom = (height * 0.88).toInt()
+        val step = max(4, width / 70)
+        var white = 0
+        var total = 0
+        var y = top
+        while (y < bottom) {
+            var x = left
+            while (x < right) {
+                total++
+                if (isFieldLine(bitmap.getPixel(x, y))) white++
+                x += step
+            }
+            y += step
+        }
+        return if (total == 0) 0f else white.toFloat() / total
     }
 
     private fun detectPlayField(bitmap: Bitmap, width: Int, height: Int): FieldBounds? {
-        val stepY = max(2, height / 80)
-        val stepX = max(2, width / 60)
-        val marginX = (width * 0.08).toInt()
+        val stepY = max(2, height / 70)
+        val stepX = max(2, width / 50)
+        val marginX = (width * 0.05).toInt()
 
         var top = -1
         var bottom = -1
         var y = 0
         while (y < height) {
-            var green = 0
+            var turf = 0
             var total = 0
             var x = marginX
             while (x < width - marginX) {
                 total++
-                if (isFieldGreen(bitmap.getPixel(x, y))) green++
+                if (isFieldTurf(bitmap.getPixel(x, y))) turf++
                 x += stepX
             }
-            val ratio = if (total == 0) 0f else green.toFloat() / total
-            if (ratio > 0.48f) {
+            val ratio = if (total == 0) 0f else turf.toFloat() / total
+            if (ratio > 0.34f) {
                 if (top < 0) top = y
                 bottom = y
             }
@@ -124,16 +167,16 @@ class FieldDetector {
         var right = 0
         var x = 0
         while (x < width) {
-            var green = 0
+            var turf = 0
             var total = 0
             var ry = top
             while (ry <= bottom) {
                 total++
-                if (isFieldGreen(bitmap.getPixel(x, ry))) green++
+                if (isFieldTurf(bitmap.getPixel(x, ry))) turf++
                 ry += stepY
             }
-            val ratio = if (total == 0) 0f else green.toFloat() / total
-            if (ratio > 0.38f) {
+            val ratio = if (total == 0) 0f else turf.toFloat() / total
+            if (ratio > 0.28f) {
                 left = min(left, x)
                 right = max(right, x)
             }
@@ -142,8 +185,8 @@ class FieldDetector {
 
         if (right <= left) return null
 
-        val padX = (right - left) * 0.015
-        val padY = (bottom - top) * 0.012
+        val padX = (right - left) * 0.012
+        val padY = (bottom - top) * 0.010
         return FieldBounds(
             left = left + padX,
             top = top + padY,
@@ -152,11 +195,21 @@ class FieldDetector {
         )
     }
 
-    private fun isFieldGreen(color: Int): Boolean {
+    private fun isFieldTurf(color: Int): Boolean {
         val hsv = FloatArray(3)
         Color.colorToHSV(color, hsv)
-        return hsv[0] in ColorCalibration.FIELD_H_MIN..ColorCalibration.FIELD_H_MAX &&
+        val isGreen = hsv[0] in ColorCalibration.FIELD_GREEN_H_MIN..ColorCalibration.FIELD_GREEN_H_MAX &&
             hsv[1] >= ColorCalibration.FIELD_S_MIN &&
             hsv[2] >= ColorCalibration.FIELD_V_MIN
+        val isYellowBrown = hsv[0] in ColorCalibration.FIELD_YELLOW_H_MIN..ColorCalibration.FIELD_YELLOW_H_MAX &&
+            hsv[1] >= ColorCalibration.FIELD_YELLOW_S_MIN &&
+            hsv[2] >= ColorCalibration.FIELD_YELLOW_V_MIN
+        return isGreen || isYellowBrown
+    }
+
+    private fun isFieldLine(color: Int): Boolean {
+        val hsv = FloatArray(3)
+        Color.colorToHSV(color, hsv)
+        return hsv[1] <= 0.18f && hsv[2] >= 0.82f
     }
 }

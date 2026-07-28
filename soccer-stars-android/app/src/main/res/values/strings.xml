@@ -6,6 +6,16 @@
     <string name="app_description">این ابزار برای دسترسی‌پذیری طراحی شده و بازی را دستکاری نمی‌کند.</string>
     <string name="start_assist">شروع ابزار کمکی</string>
     <string name="open_settings">تنظیمات پیشرفته</string>
+    <string name="open_lab">آزمایشگاه تحلیل (عکس شلیک)</string>
+    <string name="lab_title">آزمایشگاه تحلیل AI</string>
+    <string name="lab_subtitle">عکس قبل/بعد شلیک را بگذارید — مقصد نهایی توپ و مسیر مهره‌های حریف را نشان می‌دهد</string>
+    <string name="lab_pick_image">انتخاب عکس از گالری</string>
+    <string name="lab_analyze">تحلیل هوش مصنوعی</string>
+    <string name="lab_waiting">عکس شلیک را انتخاب کنید و دکمه تحلیل را بزنید</string>
+    <string name="lab_image_loaded">عکس بارگذاری شد — دکمه «تحلیل» را بزنید</string>
+    <string name="lab_analyzing">در حال تحلیل...</string>
+    <string name="lab_load_failed">بارگذاری عکس ناموفق بود</string>
+    <string name="lab_hint">نکته: بهترین نتیجه با عکسی است که مهره را کشیده‌اید و فلش شلیک دیده می‌شود. از این بخش برای تقویت تشخیص استفاده کنید.</string>
     <string name="grant_overlay">فعال‌سازی نمایش روی بازی</string>
     <string name="overlay_help_button">راهنمای دستی (اگر در لیست نیست)</string>
     <string name="overlay_help_title">اپ در لیست نیست؟</string>
@@ -48,7 +58,7 @@
     <string name="step_play_ready">Soccer Stars را باز کنید و مهره را بکشید</string>
     <string name="step_play_locked">ابتدا ابزار را شروع کنید</string>
     <string name="legend_title">راهنمای رنگ‌ها در بازی</string>
-    <string name="legend_body">سفید = خط‌کش شلیک · آبی = مسیر توپ · زرد = مسیر مهره · سبز = احتمال گل</string>
+    <string name="legend_body">سفید = خط‌کش · آبی = مسیر توپ · زرد = مهره شما · قرمز = حریف · سبز = مقصد/گل</string>
     <string name="toast_started">فعال شد — نوار «SS Assist» بالای صفحه + کنترل از نوار اعلان پایین</string>
     <string name="toast_capture_denied">بدون اجازه ضبط صفحه امکان‌پذیر نیست</string>
     <string name="settings_title">تنظیمات</string>

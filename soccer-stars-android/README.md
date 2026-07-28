@@ -4,17 +4,18 @@
 
 ## دانلود APK
 
-**نسخه 1.1.2 (جدید):** `releases/SoccerStarsAssist-v1.1.2.apk`
+**نسخه 1.2.0 (جدید):** `releases/SoccerStarsAssist-v1.2.0.apk`
 
-`https://github.com/hoseinzeto2-source/Tesf/releases/download/v1.1.2/SoccerStarsAssist-v1.1.2.apk`
+`https://github.com/hoseinzeto2-source/Tesf/releases/download/v1.2.0/SoccerStarsAssist-v1.2.0.apk`
 
-### تغییرات v1.1.2
-- **رفع باگ اصلی:** دیگر پیام «Soccer Stars را باز کنید» وقتی بازی باز است نمایش داده نمی‌شود
-- تشخیص همیشه از روی تصویر صفحه انجام می‌شود (دسترسی‌پذیری دیگر vision را مسدود نمی‌کند)
-- **فلش نارنجی Lucky Shot** و مینی‌گیم‌ها پشتیبانی می‌شود
-- تشخیص مهره و زمین برای مینی‌گیم‌ها بهبود یافت
+### تغییرات v1.2.0
+- **زمین زرد/قهوه‌ای England** و حالت landscape پشتیبانی می‌شود
+- تشخیص مهره آبی/قرمز حریف + فیزیک برخورد با همه مهره‌ها
+- مسیر مهره‌های حریف بعد از برخورد نمایش داده می‌شود
+- **آزمایشگاه تحلیل AI**: عکس شلیک را بگذارید → مقصد نهایی توپ را ببینید
+- همه قابلیت‌ها پیش‌فرض فعال (دیباگ، کیفیت بالا، خط‌کش بلند)
 
-**نسخه 1.1.1:** `releases/SoccerStarsAssist-v1.1.1.apk`
+**نسخه 1.1.2:** `releases/SoccerStarsAssist-v1.1.2.apk`
 
 ## نصب
 

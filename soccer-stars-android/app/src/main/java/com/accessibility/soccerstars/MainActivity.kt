@@ -50,6 +50,9 @@ class MainActivity : AppCompatActivity() {
         binding.settingsButton.setOnClickListener {
             startActivity(Intent(this, SettingsActivity::class.java))
         }
+        binding.labButton.setOnClickListener {
+            startActivity(Intent(this, ScreenshotLabActivity::class.java))
+        }
         binding.grantOverlayButton.setOnClickListener { requestOverlayPermission() }
         binding.grantAccessibilityButton.setOnClickListener { requestAccessibility() }
         binding.overlayHelpButton.setOnClickListener {

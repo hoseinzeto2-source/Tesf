@@ -74,6 +74,25 @@ class GuideOverlayView(context: Context) : View(context) {
     style = Paint.Style.STROKE
   }
 
+  private val enemyPathPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+    color = Color.argb(190, 255, 100, 100)
+    strokeWidth = 3f
+    style = Paint.Style.STROKE
+    pathEffect = DashPathEffect(floatArrayOf(10f, 8f), 0f)
+  }
+
+  private val debugBluePuckPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+    color = Color.argb(200, 80, 160, 255)
+    strokeWidth = 2f
+    style = Paint.Style.STROKE
+  }
+
+  private val debugRedPuckPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+    color = Color.argb(200, 255, 80, 80)
+    strokeWidth = 2f
+    style = Paint.Style.STROKE
+  }
+
   private val debugPuckPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
     color = Color.argb(160, 255, 120, 255)
     strokeWidth = 2f
@@ -129,8 +148,14 @@ class GuideOverlayView(context: Context) : View(context) {
     if (showDebug) {
       state.debugField?.let { canvas.drawRect(it, debugFieldPaint) }
       state.debugBall?.let { canvas.drawCircle(it.x, it.y, 14f, debugBallPaint) }
-      for (p in state.debugPucks) {
-        canvas.drawCircle(p.x, p.y, 20f, debugPuckPaint)
+      state.debugPucks.forEachIndexed { index, p ->
+        val team = state.debugPuckTeams.getOrNull(index)
+        val paint = when (team) {
+          "blue" -> debugBluePuckPaint
+          "red" -> debugRedPuckPaint
+          else -> debugPuckPaint
+        }
+        canvas.drawCircle(p.x, p.y, 20f, paint)
       }
     }
 
@@ -139,6 +164,9 @@ class GuideOverlayView(context: Context) : View(context) {
     drawPolyline(canvas, state.rulerPoints, rulerPaint)
     drawRulerTicks(canvas, state.rulerPoints)
     drawPolyline(canvas, state.puckPath, puckPathPaint)
+    for (enemyPath in state.enemyPuckPaths) {
+      drawPolyline(canvas, enemyPath, enemyPathPaint)
+    }
     drawPolyline(
       canvas,
       state.ballPath,
@@ -152,6 +180,11 @@ class GuideOverlayView(context: Context) : View(context) {
       }
     }
 
+    state.finalBallPoint?.let { final ->
+      canvas.drawCircle(final.x, final.y, 16f, goalFillPaint)
+      canvas.drawCircle(final.x, final.y, 16f, goalPaint)
+    }
+
     if (state.rulerPoints.size >= 2) {
       val prev = state.rulerPoints[state.rulerPoints.size - 2]
       val end = state.rulerPoints.last()
@@ -160,7 +193,7 @@ class GuideOverlayView(context: Context) : View(context) {
 
     if (showLegend && state.showLegend) {
       val y = height - 48f
-      canvas.drawText("سفید=خط‌کش · آبی=توپ · زرد=مهره · سبز=گل", 24f, y, legendPaint)
+      canvas.drawText("سفید=خط‌کش · آبی=توپ · زرد=مهره · قرمز=حریف · سبز=گل", 24f, y, legendPaint)
     }
   }
 

@@ -51,7 +51,9 @@ data class ShotInput(
 data class SimulationResult(
     val puckPath: List<Pair<Double, Double>>,
     val ballPath: List<Pair<Double, Double>>,
+    val enemyPuckPaths: Map<Int, List<Pair<Double, Double>>>,
     val goalScored: Boolean,
+    val finalBallPosition: Pair<Double, Double>?,
 )
 
 class PhysicsEngine(
@@ -74,6 +76,8 @@ class PhysicsEngine(
         shooter.vy = direction.y * speed
 
         val puckPath = mutableListOf(shooter.x to shooter.y)
+        val enemyPaths = sim.filter { it.id != shot.puckId && it.kind.startsWith("puck") }
+            .associate { it.id to mutableListOf(it.x to it.y) }
         val ball = sim.firstOrNull { it.kind == "ball" }
         val ballPath = mutableListOf<Pair<Double, Double>>()
         if (ball != null) ballPath += ball.x to ball.y
@@ -106,16 +110,35 @@ class PhysicsEngine(
             }
 
             if (shooter.speed() > stopSpeed) puckPath += shooter.x to shooter.y
+            enemyPaths.keys.forEach { id ->
+                val body = sim.first { it.id == id }
+                if (body.speed() > stopSpeed) {
+                    enemyPaths.getValue(id) += body.x to body.y
+                }
+            }
             if (ball != null && ball.speed() > stopSpeed) {
                 ballPath += ball.x to ball.y
                 if (goalRect != null && inGoal(ball, goalRect)) {
                     goalScored = true
-                    return SimulationResult(puckPath, ballPath, true)
+                    return SimulationResult(
+                        puckPath,
+                        ballPath,
+                        enemyPaths.mapValues { it.value.toList() },
+                        true,
+                        ball.x to ball.y,
+                    )
                 }
             }
         }
 
-        return SimulationResult(puckPath, ballPath, goalScored)
+        val finalBall = ball?.let { it.x to it.y }
+        return SimulationResult(
+            puckPath,
+            ballPath,
+            enemyPaths.mapValues { it.value.toList() },
+            goalScored,
+            finalBall,
+        )
     }
 
     private fun inGoal(ball: CircleBody, rect: DoubleArray): Boolean {
