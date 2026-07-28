@@ -12,4 +12,7 @@ data class OverlayState(
     val goalScored: Boolean = false,
     val powerPercent: Int = 0,
     val showLegend: Boolean = true,
+    val confidence: Float = 0f,
+    val debugPucks: List<PointF> = emptyList(),
+    val debugBall: PointF? = null,
 )

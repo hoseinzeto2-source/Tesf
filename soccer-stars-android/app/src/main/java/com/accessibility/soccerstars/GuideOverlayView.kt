@@ -68,11 +68,41 @@ class GuideOverlayView(context: Context) : View(context) {
     setShadowLayer(5f, 0f, 0f, Color.BLACK)
   }
 
+  private val debugPuckPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+    color = Color.argb(160, 255, 120, 255)
+    strokeWidth = 2f
+    style = Paint.Style.STROKE
+  }
+
+  private val debugBallPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+    color = Color.argb(200, 255, 255, 255)
+    strokeWidth = 3f
+    style = Paint.Style.STROKE
+  }
+
+  private val hudBgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+    color = Color.argb(210, 16, 24, 36)
+    style = Paint.Style.FILL
+  }
+
+  private val hudBorderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+    color = Color.argb(230, 27, 153, 139)
+    strokeWidth = 2f
+    style = Paint.Style.STROKE
+  }
+
   private val legendPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
     color = Color.argb(200, 255, 255, 255)
-    textSize = 24f
-    setShadowLayer(4f, 0f, 0f, Color.BLACK)
+    textSize = 22f
   }
+
+  private val hudTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+    color = Color.argb(245, 27, 153, 139)
+    textSize = 26f
+    isFakeBoldText = true
+  }
+
+  var showDebug: Boolean = false
 
   fun updateState(newState: OverlayState) {
     state = newState
@@ -82,9 +112,13 @@ class GuideOverlayView(context: Context) : View(context) {
   override fun onDraw(canvas: Canvas) {
     super.onDraw(canvas)
 
-    canvas.drawText(state.statusText, 24f, 58f, textPaint)
-    if (state.active) {
-      canvas.drawText("قدرت شلیک: ${state.powerPercent}%", 24f, 98f, subTextPaint)
+    drawHudPanel(canvas)
+
+    if (showDebug) {
+      state.debugBall?.let { canvas.drawCircle(it.x, it.y, 14f, debugBallPaint) }
+      for (p in state.debugPucks) {
+        canvas.drawCircle(p.x, p.y, 20f, debugPuckPaint)
+      }
     }
 
     if (!state.active) return
@@ -113,7 +147,34 @@ class GuideOverlayView(context: Context) : View(context) {
 
     if (showLegend && state.showLegend) {
       val y = height - 48f
-      canvas.drawText("سفید=خط‌کش  آبی=مسیر توپ  زرد=مسیر مهره  سبز=گل", 24f, y, legendPaint)
+      canvas.drawText("سفید=خط‌کش · آبی=توپ · زرد=مهره · سبز=گل", 24f, y, legendPaint)
+    }
+  }
+
+  private fun drawHudPanel(canvas: Canvas) {
+    val panelW = 340f
+    val panelH = if (state.active) 118f else 78f
+    val left = 20f
+    val top = 20f
+    val right = left + panelW
+    val bottom = top + panelH
+
+    canvas.drawRoundRect(left, top, right, bottom, 14f, 14f, hudBgPaint)
+    canvas.drawRoundRect(left, top, right, bottom, 14f, 14f, hudBorderPaint)
+
+    canvas.drawText("SS Assist HUD", left + 16f, top + 30f, hudTextPaint)
+    canvas.drawText(state.statusText, left + 16f, top + 58f, subTextPaint)
+
+    val conf = (state.confidence * 100).toInt()
+    canvas.drawText("دقت تشخیص: $conf%", left + 16f, top + 86f, legendPaint)
+
+    if (state.active) {
+      canvas.drawText("قدرت: ${state.powerPercent}%", left + 190f, top + 86f, legendPaint)
+      val barLeft = left + 16f
+      val barTop = top + 98f
+      val barW = panelW - 32f
+      canvas.drawRect(barLeft, barTop, barLeft + barW, barTop + 8f, rulerTickPaint)
+      canvas.drawRect(barLeft, barTop, barLeft + barW * (state.powerPercent / 100f), barTop + 8f, arrowPaint)
     }
   }
 

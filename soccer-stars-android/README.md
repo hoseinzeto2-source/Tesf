@@ -4,10 +4,18 @@
 
 ## دانلود APK
 
-**نسخه 1.0.0:** فایل `releases/SoccerStarsAssist-v1.0.0.apk`
+**نسخه 1.0.2 (جدید):** `releases/SoccerStarsAssist-v1.0.2.apk`
 
-پس از push به GitHub، لینک مستقیم:
-`https://github.com/hoseinzeto2-source/Tesf/releases/download/v1.0.0/SoccerStarsAssist-v1.0.0.apk`
+لینک مستقیم:
+`https://github.com/hoseinzeto2-source/Tesf/releases/download/v1.0.2/SoccerStarsAssist-v1.0.2.apk`
+
+### تغییرات v1.0.2
+- منوی شناور ImGui-style داخل بازی (قابل جابجایی)
+- تشخیص بهتر مهره‌های قرمز/آبی و خط زرد هدف
+- نمایش دایره‌های debug برای دقت تشخیص
+- HUD وضعیت با درصد دقت
+
+**نسخه‌های قبلی:** v1.0.1، v1.0.0
 
 ## نصب
 
@@ -18,6 +26,8 @@
 5. Soccer Stars را باز کنید
 
 ## هنگام بازی
+
+منوی **SS Assist** روی بازی شناور است — می‌توانید جابجایش کنید.
 
 وقتی مهره را می‌گیرید و می‌کشید:
 

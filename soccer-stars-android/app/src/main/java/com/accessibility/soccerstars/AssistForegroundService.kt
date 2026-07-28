@@ -38,9 +38,13 @@ class AssistForegroundService : Service() {
     private var virtualDisplay: VirtualDisplay? = null
 
     private var overlayView: GuideOverlayView? = null
+    private var hudMenu: AssistHudMenu? = null
+    private var hudParams: WindowManager.LayoutParams? = null
     private var windowManager: WindowManager? = null
 
     private var controller: AssistController? = null
+    private var assistEnabled = true
+    private var showDebug = false
     private var screenWidth = 0
     private var screenHeight = 0
     private var screenDensity = 0
@@ -73,6 +77,8 @@ class AssistForegroundService : Service() {
 
         PhysicsStorage.ensureDefault(applicationContext)
         processScale = AppPreferences.processScale(this)
+        assistEnabled = AppPreferences.assistEnabled(this)
+        showDebug = AppPreferences.showDebug(this)
         controller = AssistController(
             physicsPath = PhysicsStorage.physicsFile(applicationContext).absolutePath,
             rulerExtensionPx = AppPreferences.rulerExtension(this),
@@ -99,7 +105,9 @@ class AssistForegroundService : Service() {
         mediaProjection?.stop()
 
         overlayView?.let { windowManager?.removeView(it) }
+        hudMenu?.let { windowManager?.removeView(it) }
         overlayView = null
+        hudMenu = null
         super.onDestroy()
     }
 
@@ -128,14 +136,10 @@ class AssistForegroundService : Service() {
 
         overlayView = GuideOverlayView(this).apply {
             showLegend = AppPreferences.showLegend(this@AssistForegroundService)
+            showDebug = AppPreferences.showDebug(this@AssistForegroundService)
         }
 
-        val layoutType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-        } else {
-            @Suppress("DEPRECATION")
-            WindowManager.LayoutParams.TYPE_PHONE
-        }
+        val layoutType = overlayLayoutType()
 
         val params = WindowManager.LayoutParams(
             WindowManager.LayoutParams.MATCH_PARENT,
@@ -151,6 +155,59 @@ class AssistForegroundService : Service() {
         }
 
         windowManager?.addView(overlayView, params)
+        setupHudMenu(layoutType)
+    }
+
+    private fun overlayLayoutType(): Int =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+        } else {
+            @Suppress("DEPRECATION")
+            WindowManager.LayoutParams.TYPE_PHONE
+        }
+
+    private fun setupHudMenu(layoutType: Int) {
+        val (hudX, hudY) = AppPreferences.hudPosition(this)
+        hudMenu = AssistHudMenu(this).apply {
+            assistEnabled = AppPreferences.assistEnabled(this@AssistForegroundService)
+            debugEnabled = AppPreferences.showDebug(this@AssistForegroundService)
+            onAssistToggle = { enabled ->
+                this@AssistForegroundService.assistEnabled = enabled
+                AppPreferences.setAssistEnabled(this@AssistForegroundService, enabled)
+            }
+            onDebugToggle = { enabled ->
+                this@AssistForegroundService.showDebug = enabled
+                overlayView?.showDebug = enabled
+                AppPreferences.setShowDebug(this@AssistForegroundService, enabled)
+            }
+            onOpenSettings = {
+                val intent = Intent(this@AssistForegroundService, SettingsActivity::class.java)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                startActivity(intent)
+            }
+            onPositionChanged = { x, y ->
+                hudParams?.let { p ->
+                    p.x = x
+                    p.y = y
+                    windowManager?.updateViewLayout(hudMenu, p)
+                    AppPreferences.setHudPosition(this@AssistForegroundService, x, y)
+                }
+            }
+        }
+
+        hudParams = WindowManager.LayoutParams(
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            layoutType,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+            PixelFormat.TRANSLUCENT,
+        ).apply {
+            gravity = Gravity.TOP or Gravity.START
+            x = hudX
+            y = hudY
+        }
+
+        windowManager?.addView(hudMenu, hudParams)
     }
 
     private fun startCapture(resultCode: Int, data: Intent) {
@@ -192,7 +249,11 @@ class AssistForegroundService : Service() {
 
                 val ctrl = controller ?: return@setOnImageAvailableListener
                 val invScale = 1f / processScale
-                val state = ctrl.process(scaled, invScale)
+                val state = if (assistEnabled) {
+                    ctrl.process(scaled, invScale)
+                } else {
+                    ctrl.detectOnly(scaled, invScale)
+                }
                 scaled.recycle()
 
                 mainHandler.post {

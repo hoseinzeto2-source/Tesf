@@ -22,6 +22,7 @@ class SettingsActivity : AppCompatActivity() {
         binding.scaleSlider.value = scale
         binding.showPuckSwitch.isChecked = AppPreferences.showPuckPath(this)
         binding.showLegendSwitch.isChecked = AppPreferences.showLegend(this)
+        binding.showDebugSwitch.isChecked = AppPreferences.showDebug(this)
         binding.physicsPathText.text = PhysicsStorage.displayPath(this)
 
         updateLabels(ruler, scale)
@@ -40,6 +41,7 @@ class SettingsActivity : AppCompatActivity() {
                 showPuckPath = binding.showPuckSwitch.isChecked,
                 showLegend = binding.showLegendSwitch.isChecked,
                 processScale = binding.scaleSlider.value,
+                showDebug = binding.showDebugSwitch.isChecked,
             )
             Toast.makeText(this, R.string.settings_saved, Toast.LENGTH_SHORT).show()
             finish()

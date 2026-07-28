@@ -116,6 +116,13 @@
                     android:layout_height="wrap_content"
                     android:text="نمایش راهنمای رنگ‌ها"
                     android:textColor="@color/text_primary" />
+
+                <com.google.android.material.switchmaterial.SwitchMaterial
+                    android:id="@+id/showDebugSwitch"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="نمایش دایره‌های تشخیص مهره/توپ"
+                    android:textColor="@color/text_primary" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 

@@ -27,17 +27,17 @@ class AssistController(
 
     fun process(bitmap: Bitmap, scale: Float): OverlayState {
         val detection = detector.detect(bitmap)
-        val bounds = detection.bounds ?: return idle("زمین بازی پیدا نشد — Soccer Stars را باز کنید")
+        val bounds = detection.bounds ?: return idle("زمین بازی پیدا نشد — Soccer Stars را باز کنید", detection, scale)
 
         val scaledBounds = scaleBounds(bounds, scale)
         physics.bounds = scaledBounds
 
         if (!detection.aim.active) {
-            return idle("مهره را بگیرید و بکشید")
+            return idle("مهره را بگیرید و بکشید", detection, scale)
         }
 
-        val shooter = detector.nearestPuckToAim(detection) ?: return idle("مهره را بگیرید و بکشید")
-        val ball = detection.ball ?: return idle("توپ پیدا نشد")
+        val shooter = detector.nearestPuckToAim(detection) ?: return idle("مهره را بگیرید و بکشید", detection, scale)
+        val ball = detection.ball ?: return idle("توپ پیدا نشد", detection, scale)
 
         val shot = ShotInput(
             puckId = shooter.id,
@@ -87,10 +87,22 @@ class AssistController(
             goalScored = result.goalScored,
             powerPercent = powerPercent,
             showLegend = true,
+            confidence = detection.confidence,
+            debugPucks = detection.pucks.map { PointF((it.x * scale).toFloat(), (it.y * scale).toFloat()) },
+            debugBall = detection.ball?.let { PointF((it.x * scale).toFloat(), (it.y * scale).toFloat()) },
         )
     }
 
-    private fun idle(message: String) = OverlayState(active = false, statusText = message)
+    fun detectOnly(bitmap: Bitmap, scale: Float): OverlayState =
+        idle("راهنما خاموش است — از منو روشن کنید", detector.detect(bitmap), scale)
+
+    private fun idle(message: String, detection: FrameDetection, scale: Float) = OverlayState(
+        active = false,
+        statusText = message,
+        confidence = detection.confidence,
+        debugPucks = detection.pucks.map { PointF((it.x * scale).toFloat(), (it.y * scale).toFloat()) },
+        debugBall = detection.ball?.let { PointF((it.x * scale).toFloat(), (it.y * scale).toFloat()) },
+    )
 
     private fun scaleBounds(bounds: FieldBounds, scale: Float): FieldBounds =
         FieldBounds(

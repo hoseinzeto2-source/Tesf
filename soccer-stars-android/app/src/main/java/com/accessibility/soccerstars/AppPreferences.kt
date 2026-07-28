@@ -10,6 +10,10 @@ object AppPreferences {
     private const val KEY_SHOW_PUCK = "show_puck_path"
     private const val KEY_SHOW_LEGEND = "show_legend"
     private const val KEY_PROCESS_SCALE = "process_scale"
+    private const val KEY_SHOW_DEBUG = "show_debug"
+    private const val KEY_ASSIST_ENABLED = "assist_enabled"
+    private const val KEY_HUD_X = "hud_x"
+    private const val KEY_HUD_Y = "hud_y"
 
     fun prefs(context: Context): SharedPreferences =
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -26,18 +30,43 @@ object AppPreferences {
     fun processScale(context: Context): Float =
         prefs(context).getFloat(KEY_PROCESS_SCALE, 0.45f).coerceIn(0.25f, 1.0f)
 
+    fun showDebug(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_SHOW_DEBUG, false)
+
+    fun assistEnabled(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_ASSIST_ENABLED, true)
+
+    fun hudPosition(context: Context): Pair<Int, Int> {
+        val p = prefs(context)
+        return p.getInt(KEY_HUD_X, 24) to p.getInt(KEY_HUD_Y, 160)
+    }
+
+    fun setAssistEnabled(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(KEY_ASSIST_ENABLED, enabled).apply()
+    }
+
+    fun setShowDebug(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(KEY_SHOW_DEBUG, enabled).apply()
+    }
+
+    fun setHudPosition(context: Context, x: Int, y: Int) {
+        prefs(context).edit().putInt(KEY_HUD_X, x).putInt(KEY_HUD_Y, y).apply()
+    }
+
     fun save(
         context: Context,
         rulerExtension: Float,
         showPuckPath: Boolean,
         showLegend: Boolean,
         processScale: Float,
+        showDebug: Boolean = showDebug(context),
     ) {
         prefs(context).edit()
             .putFloat(KEY_RULER, rulerExtension)
             .putBoolean(KEY_SHOW_PUCK, showPuckPath)
             .putBoolean(KEY_SHOW_LEGEND, showLegend)
             .putFloat(KEY_PROCESS_SCALE, processScale)
+            .putBoolean(KEY_SHOW_DEBUG, showDebug)
             .apply()
     }
 
