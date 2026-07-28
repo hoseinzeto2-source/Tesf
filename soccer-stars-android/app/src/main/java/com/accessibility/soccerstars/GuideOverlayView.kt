@@ -115,8 +115,18 @@ class GuideOverlayView(context: Context) : View(context) {
     invalidate()
   }
 
+  fun clearDisplay() {
+    state = OverlayState()
+    invalidate()
+  }
+
   override fun onDraw(canvas: Canvas) {
     super.onDraw(canvas)
+    if (visibility != VISIBLE) return
+
+    if (state.scenePhase == com.accessibility.soccerstars.vision.ScenePhase.MENU_OR_HOME && !state.active) {
+      return
+    }
 
     drawHudPanel(canvas)
 

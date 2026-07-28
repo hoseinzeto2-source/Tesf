@@ -1,10 +1,6 @@
 package com.accessibility.soccerstars
 
 import android.app.Activity
-import android.app.Notification
-import android.app.NotificationChannel
-import android.app.NotificationManager
-import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
@@ -26,7 +22,7 @@ import android.util.DisplayMetrics
 import android.view.Gravity
 import android.view.WindowManager
 import com.accessibility.soccerstars.physics.PhysicsStorage
-import androidx.core.app.NotificationCompat
+import com.accessibility.soccerstars.vision.ScenePhase
 
 class AssistForegroundService : Service() {
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -38,19 +34,21 @@ class AssistForegroundService : Service() {
     private var virtualDisplay: VirtualDisplay? = null
 
     private var overlayView: GuideOverlayView? = null
-    private var hudMenu: AssistHudMenu? = null
-    private var hudParams: WindowManager.LayoutParams? = null
+    private var overlayController: OverlayController? = null
     private var windowManager: WindowManager? = null
+    private lateinit var assistNotification: AssistNotification
 
     private var controller: AssistController? = null
     private var assistEnabled = true
     private var showDebug = false
+    private var lastStatusLine = "در حال آماده‌سازی..."
     private var screenWidth = 0
     private var screenHeight = 0
     private var screenDensity = 0
-    private var processScale = 0.45f
+    private var processScale = 0.55f
     private var lastProcessMs = 0L
     private var processing = false
+    private var captureStarted = false
 
     private val projectionCallback = object : MediaProjection.Callback() {
         override fun onStop() {
@@ -61,9 +59,26 @@ class AssistForegroundService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (intent?.action == ACTION_STOP) {
-            stopSelf()
-            return START_NOT_STICKY
+        assistNotification = AssistNotification(this)
+
+        when (intent?.action) {
+            AssistNotification.ACTION_STOP -> {
+                stopSelf()
+                return START_NOT_STICKY
+            }
+            AssistNotification.ACTION_TOGGLE_ASSIST -> {
+                assistEnabled = !assistEnabled
+                AppPreferences.setAssistEnabled(this, assistEnabled)
+                refreshNotification()
+                return START_STICKY
+            }
+            AssistNotification.ACTION_TOGGLE_DEBUG -> {
+                showDebug = !showDebug
+                AppPreferences.setShowDebug(this, showDebug)
+                overlayView?.showDebug = showDebug
+                refreshNotification()
+                return START_STICKY
+            }
         }
 
         val resultCode = intent?.getIntExtra(EXTRA_RESULT_CODE, Activity.RESULT_CANCELED)
@@ -71,6 +86,7 @@ class AssistForegroundService : Service() {
         val data = readProjectionData(intent)
 
         if (resultCode != Activity.RESULT_OK || data == null) {
+            if (captureStarted) return START_STICKY
             stopSelf()
             return START_NOT_STICKY
         }
@@ -86,10 +102,18 @@ class AssistForegroundService : Service() {
             showPuckPath = AppPreferences.showPuckPath(this),
         )
 
-        startForeground(NOTIFICATION_ID, buildNotification())
-        initMetrics()
-        setupOverlay()
-        startCapture(resultCode, data)
+        startForeground(
+            AssistNotification.NOTIFICATION_ID,
+            assistNotification.build(lastStatusLine, assistEnabled, showDebug),
+        )
+
+        if (!captureStarted) {
+            initMetrics()
+            setupOverlay()
+            startCapture(resultCode, data)
+            captureStarted = true
+        }
+
         return START_STICKY
     }
 
@@ -105,10 +129,9 @@ class AssistForegroundService : Service() {
         imageReader?.close()
         mediaProjection?.stop()
 
-        overlayView?.let { windowManager?.removeView(it) }
-        hudMenu?.let { windowManager?.removeView(it) }
+        overlayController?.destroy()
         overlayView = null
-        hudMenu = null
+        overlayController = null
         super.onDestroy()
     }
 
@@ -135,12 +158,18 @@ class AssistForegroundService : Service() {
     private fun setupOverlay() {
         if (!Settings.canDrawOverlays(this)) return
 
+        val wm = windowManager ?: return
         overlayView = GuideOverlayView(this).apply {
             showLegend = AppPreferences.showLegend(this@AssistForegroundService)
-            showDebug = AppPreferences.showDebug(this@AssistForegroundService)
+            showDebug = this@AssistForegroundService.showDebug
         }
 
-        val layoutType = overlayLayoutType()
+        val layoutType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+        } else {
+            @Suppress("DEPRECATION")
+            WindowManager.LayoutParams.TYPE_PHONE
+        }
 
         val params = WindowManager.LayoutParams(
             WindowManager.LayoutParams.MATCH_PARENT,
@@ -155,60 +184,9 @@ class AssistForegroundService : Service() {
             gravity = Gravity.TOP or Gravity.START
         }
 
-        windowManager?.addView(overlayView, params)
-        setupHudMenu(layoutType)
-    }
-
-    private fun overlayLayoutType(): Int =
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-        } else {
-            @Suppress("DEPRECATION")
-            WindowManager.LayoutParams.TYPE_PHONE
-        }
-
-    private fun setupHudMenu(layoutType: Int) {
-        val (hudX, hudY) = AppPreferences.hudPosition(this)
-        hudMenu = AssistHudMenu(this).apply {
-            assistEnabled = AppPreferences.assistEnabled(this@AssistForegroundService)
-            debugEnabled = AppPreferences.showDebug(this@AssistForegroundService)
-            onAssistToggle = { enabled ->
-                this@AssistForegroundService.assistEnabled = enabled
-                AppPreferences.setAssistEnabled(this@AssistForegroundService, enabled)
-            }
-            onDebugToggle = { enabled ->
-                this@AssistForegroundService.showDebug = enabled
-                overlayView?.showDebug = enabled
-                AppPreferences.setShowDebug(this@AssistForegroundService, enabled)
-            }
-            onOpenSettings = {
-                val intent = Intent(this@AssistForegroundService, SettingsActivity::class.java)
-                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                startActivity(intent)
-            }
-            onPositionChanged = { x, y ->
-                hudParams?.let { p ->
-                    p.x = x
-                    p.y = y
-                    windowManager?.updateViewLayout(hudMenu, p)
-                    AppPreferences.setHudPosition(this@AssistForegroundService, x, y)
-                }
-            }
-        }
-
-        hudParams = WindowManager.LayoutParams(
-            WindowManager.LayoutParams.WRAP_CONTENT,
-            WindowManager.LayoutParams.WRAP_CONTENT,
-            layoutType,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
-            PixelFormat.TRANSLUCENT,
-        ).apply {
-            gravity = Gravity.TOP or Gravity.START
-            x = hudX
-            y = hudY
-        }
-
-        windowManager?.addView(hudMenu, hudParams)
+        wm.addView(overlayView, params)
+        overlayController = OverlayController(wm, overlayView)
+        overlayController?.hide()
     }
 
     private fun startCapture(resultCode: Int, data: Intent) {
@@ -244,46 +222,64 @@ class AssistForegroundService : Service() {
             val image = reader.acquireLatestImage() ?: return@setOnImageAvailableListener
             processing = true
             try {
-                val ctrl = controller ?: return@setOnImageAvailableListener
-
-                if (AccessibilityHelper.isEnabled(this@AssistForegroundService) &&
-                    !ForegroundAppTracker.isSoccerStarsForeground()
-                ) {
-                    val pkg = ForegroundAppTracker.currentPackage()
-                    val state = OverlayState(
-                        active = false,
-                        statusText = AccessibilityHelper.statusLabel(this@AssistForegroundService, pkg),
-                        scenePhase = com.accessibility.soccerstars.vision.ScenePhase.MENU_OR_HOME,
-                    )
-                    mainHandler.post {
-                        overlayView?.updateState(state)
-                        processing = false
-                    }
-                    return@setOnImageAvailableListener
-                }
-
-                val full = image.toBitmap()
-                val scaled = scaleBitmap(full, processScale)
-                if (scaled !== full) full.recycle()
-
-                val invScale = 1f / processScale
-                val state = if (assistEnabled) {
-                    ctrl.process(scaled, invScale)
-                } else {
-                    ctrl.detectOnly(scaled, invScale)
-                }
-                scaled.recycle()
-
-                mainHandler.post {
-                    overlayView?.updateState(state)
-                    processing = false
-                }
+                publishFrame(image)
             } catch (_: Exception) {
                 processing = false
             } finally {
                 image.close()
             }
         }, workerHandler)
+    }
+
+    private fun publishFrame(image: android.media.Image) {
+        val ctrl = controller ?: return
+        val soccerStarsForeground = isSoccerStarsForeground()
+        val accessibilityOn = AccessibilityHelper.isEnabled(this)
+
+        if (accessibilityOn && !soccerStarsForeground) {
+            val pkg = ForegroundAppTracker.currentPackage()
+            val status = AccessibilityHelper.statusLabel(this, pkg)
+            mainHandler.post {
+                overlayController?.applyScene(ScenePhase.MENU_OR_HOME, soccerStarsForeground = false)
+                lastStatusLine = status
+                refreshNotification()
+                processing = false
+            }
+            return
+        }
+
+        val full = image.toBitmap()
+        val scaled = scaleBitmap(full, processScale)
+        if (scaled !== full) full.recycle()
+
+        val invScale = 1f / processScale
+        val state = if (assistEnabled) {
+            ctrl.process(scaled, invScale)
+        } else {
+            ctrl.detectOnly(scaled, invScale)
+        }
+        scaled.recycle()
+
+        mainHandler.post {
+            val inGame = soccerStarsForeground && state.scenePhase != ScenePhase.MENU_OR_HOME
+            overlayController?.applyScene(state.scenePhase, soccerStarsForeground)
+            if (inGame) {
+                overlayView?.updateState(state)
+            }
+            lastStatusLine = state.statusText
+            refreshNotification()
+            processing = false
+        }
+    }
+
+    private fun isSoccerStarsForeground(): Boolean {
+        if (!AccessibilityHelper.isEnabled(this)) return true
+        return ForegroundAppTracker.isSoccerStarsForeground()
+    }
+
+    private fun refreshNotification() {
+        if (!::assistNotification.isInitialized) return
+        assistNotification.update(lastStatusLine, assistEnabled, showDebug)
     }
 
     private fun scaleBitmap(source: Bitmap, scale: Float): Bitmap {
@@ -293,42 +289,9 @@ class AssistForegroundService : Service() {
         return Bitmap.createScaledBitmap(source, w, h, true)
     }
 
-    private fun buildNotification(): Notification {
-        val channelId = "soccer_stars_assist"
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                channelId,
-                "Soccer Stars Assist",
-                NotificationManager.IMPORTANCE_LOW,
-            )
-            getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
-        }
-
-        val stopIntent = Intent(this, AssistForegroundService::class.java).apply { action = ACTION_STOP }
-        val stopPending = PendingIntent.getService(
-            this, 0, stopIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-        )
-
-        val settingsIntent = Intent(this, SettingsActivity::class.java)
-        val settingsPending = PendingIntent.getActivity(
-            this, 1, settingsIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-        )
-
-        return NotificationCompat.Builder(this, channelId)
-            .setContentTitle("Soccer Stars Assist فعال است")
-            .setContentText("خط‌کش و مسیر توپ روی بازی نمایش داده می‌شود")
-            .setSmallIcon(android.R.drawable.ic_menu_compass)
-            .addAction(android.R.drawable.ic_menu_preferences, "تنظیمات", settingsPending)
-            .addAction(android.R.drawable.ic_menu_close_clear_cancel, "توقف", stopPending)
-            .setOngoing(true)
-            .build()
-    }
-
     companion object {
         const val EXTRA_RESULT_CODE = "result_code"
         const val EXTRA_RESULT_DATA = "result_data"
-        private const val ACTION_STOP = "com.accessibility.soccerstars.STOP"
-        private const val NOTIFICATION_ID = 42
         private const val FRAME_INTERVAL_MS = 90L
 
         fun start(context: Context, resultCode: Int, data: Intent) {
