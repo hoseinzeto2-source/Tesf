@@ -23,8 +23,12 @@
     <string name="accessibility_help_title">تشخیص صفحه اصلی و بازی</string>
     <string name="accessibility_help_body">برای اینکه ابزار بداند الان صفحه اصلی است یا Soccer Stars:\n\nتنظیمات → دسترسی‌ها (Accessibility) → Soccer Stars Assist → روشن\n\nاین سرویس فقط نام برنامه جلویی را می‌خواند و صفحه را لمس نمی‌کند.</string>
     <string name="accessibility_open_settings">باز کردن تنظیمات دسترسی</string>
+    <string name="accessibility_already_enabled">سرویس تشخیص صفحه فعال است. اگر هنوز خطا می‌بینید، یک‌بار اپ را ببندید و دوباره باز کنید.</string>
+    <string name="accessibility_debug">بررسی وضعیت</string>
+    <string name="accessibility_debug_title">وضعیت سرویس Accessibility</string>
     <string name="step_accessibility_title">۲. تشخیص صفحه (ضروری)</string>
     <string name="step_accessibility_done">فعال شد — صفحه اصلی تشخیص داده می‌شود</string>
+    <string name="step_accessibility_running">فعال و در حال اجرا ✓</string>
     <string name="step_accessibility_pending">برای تشخیص صفحه اصلی لازم است</string>
     <string name="status_on_home_screen">صفحه اصلی — Soccer Stars را باز کنید</string>
     <string name="status_waiting_game">Soccer Stars را باز کنید</string>

@@ -17,6 +17,7 @@ import com.accessibility.soccerstars.physics.PhysicsStorage
 
 class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
+    private var accessibilityWatcher: AccessibilityStateWatcher? = null
 
     private val notificationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission(),
@@ -62,10 +63,27 @@ class MainActivity : AppCompatActivity() {
         binding.stepAccessibilityCard.setOnClickListener {
             if (!AccessibilityHelper.isEnabled(this)) {
                 AccessibilityHelper.showGuide(this)
+            } else {
+                AccessibilityHelper.showDebug(this)
             }
         }
+        binding.stepAccessibilityCard.setOnLongClickListener {
+            AccessibilityHelper.showDebug(this)
+            true
+        }
+        accessibilityWatcher = AccessibilityStateWatcher(this) { updateUi() }
         requestNotificationPermissionIfNeeded()
         updateUi()
+    }
+
+    override fun onStart() {
+        super.onStart()
+        accessibilityWatcher?.start()
+    }
+
+    override fun onStop() {
+        accessibilityWatcher?.stop()
+        super.onStop()
     }
 
     override fun onResume() {
@@ -85,7 +103,8 @@ class MainActivity : AppCompatActivity() {
 
     private fun updateUi() {
         val overlayGranted = OverlayPermissionHelper.isGranted(this)
-        val accessibilityGranted = AccessibilityHelper.isEnabled(this)
+        val accessibilityStatus = AccessibilityHelper.probe(this)
+        val accessibilityGranted = accessibilityStatus.enabled
         val ready = overlayGranted && accessibilityGranted
 
         setStepState(
@@ -100,7 +119,7 @@ class MainActivity : AppCompatActivity() {
             binding.stepAccessibilityIcon,
             binding.stepAccessibilityStatus,
             accessibilityGranted,
-            R.string.step_accessibility_done,
+            if (accessibilityStatus.running) R.string.step_accessibility_running else R.string.step_accessibility_done,
             R.string.step_accessibility_pending,
         )
 

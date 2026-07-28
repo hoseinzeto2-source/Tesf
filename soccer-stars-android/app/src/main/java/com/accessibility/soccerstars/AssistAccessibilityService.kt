@@ -7,6 +7,8 @@ class AssistAccessibilityService : AccessibilityService() {
     override fun onServiceConnected() {
         super.onServiceConnected()
         ForegroundAppTracker.setAccessibilityRunning(true)
+        // Seed current foreground package when service starts.
+        rootInActiveWindow?.packageName?.toString()?.let { ForegroundAppTracker.update(it) }
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
@@ -14,6 +16,7 @@ class AssistAccessibilityService : AccessibilityService() {
         when (event.eventType) {
             AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED,
             AccessibilityEvent.TYPE_WINDOWS_CHANGED,
+            AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED,
             -> {
                 val pkg = event.packageName?.toString() ?: return
                 ForegroundAppTracker.update(pkg)
