@@ -98,6 +98,7 @@ class GameDetector(
             y = best.second.toDouble(),
             radius = ballRadius,
             mass = 1.0,
+            restitution = 0.92,
         )
     }
 

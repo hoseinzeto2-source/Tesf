@@ -56,6 +56,7 @@ data class SimulationResult(
 
 class PhysicsEngine(
     var bounds: FieldBounds,
+    private val config: PhysicsConfig = PhysicsConfig(),
     private val stopSpeed: Double = 0.08,
     private val maxSteps: Int = 2000,
 ) {
@@ -67,7 +68,7 @@ class PhysicsEngine(
         val sim = bodies.map { it.copyState() }.toMutableList()
         val shooter = sim.first { it.id == shot.puckId }
         val direction = shot.direction.normalized()
-        val ratio = min(shot.power / shot.maxPower, 1.0).coerceAtLeast(0.0)
+        val ratio = min(shot.power * config.powerScale / shot.maxPower, 1.0).coerceAtLeast(0.0)
         val speed = ratio * shot.maxSpeed
         shooter.vx = direction.x * speed
         shooter.vy = direction.y * speed
@@ -85,7 +86,7 @@ class PhysicsEngine(
             moving.forEach { body ->
                 body.x += body.vx
                 body.y += body.vy
-                resolveWall(body)
+                resolveWall(body, config.edgeRestitution)
             }
 
             for (i in sim.indices) {
@@ -95,8 +96,9 @@ class PhysicsEngine(
             }
 
             moving.forEach { body ->
-                body.vx *= body.friction
-                body.vy *= body.friction
+                val friction = if (body.kind == "ball") config.friction else config.friction
+                body.vx *= friction
+                body.vy *= friction
                 if (body.speed() <= stopSpeed) {
                     body.vx = 0.0
                     body.vy = 0.0
@@ -121,21 +123,21 @@ class PhysicsEngine(
         return ball.x in left..right && ball.y in top..bottom
     }
 
-    private fun resolveWall(body: CircleBody) {
+    private fun resolveWall(body: CircleBody, edgeRestitution: Double) {
         if (body.x - body.radius < bounds.left) {
             body.x = bounds.left + body.radius
-            body.vx = kotlin.math.abs(body.vx) * body.restitution
+            body.vx = kotlin.math.abs(body.vx) * edgeRestitution
         } else if (body.x + body.radius > bounds.right) {
             body.x = bounds.right - body.radius
-            body.vx = -kotlin.math.abs(body.vx) * body.restitution
+            body.vx = -kotlin.math.abs(body.vx) * edgeRestitution
         }
 
         if (body.y - body.radius < bounds.top) {
             body.y = bounds.top + body.radius
-            body.vy = kotlin.math.abs(body.vy) * body.restitution
+            body.vy = kotlin.math.abs(body.vy) * edgeRestitution
         } else if (body.y + body.radius > bounds.bottom) {
             body.y = bounds.bottom - body.radius
-            body.vy = -kotlin.math.abs(body.vy) * body.restitution
+            body.vy = -kotlin.math.abs(body.vy) * edgeRestitution
         }
     }
 
@@ -161,7 +163,7 @@ class PhysicsEngine(
         val velAlongNormal = rvx * nx + rvy * ny
         if (velAlongNormal > 0) return
 
-        val restitution = minOf(a.restitution, b.restitution)
+        val restitution = minOf(a.restitution, b.restitution, config.restitution)
         val impulse = -(1.0 + restitution) * velAlongNormal / (1.0 / a.mass + 1.0 / b.mass)
         val impulseX = impulse * nx
         val impulseY = impulse * ny

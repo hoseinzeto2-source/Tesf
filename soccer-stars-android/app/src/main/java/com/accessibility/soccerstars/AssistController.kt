@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import android.graphics.PointF
 import com.accessibility.soccerstars.physics.CircleBody
 import com.accessibility.soccerstars.physics.FieldBounds
+import com.accessibility.soccerstars.physics.PhysicsConfig
 import com.accessibility.soccerstars.physics.PhysicsEngine
 import com.accessibility.soccerstars.physics.ShotInput
 import com.accessibility.soccerstars.vision.FrameDetection
@@ -11,11 +12,39 @@ import com.accessibility.soccerstars.vision.GameDetector
 import kotlin.math.hypot
 import kotlin.math.min
 
-class AssistController(
-    private val detector: GameDetector = GameDetector(),
-    private val physics: PhysicsEngine = PhysicsEngine(FieldBounds(0.0, 0.0, 1.0, 1.0)),
-    private val config: AssistConfig = AssistConfig(),
+class AssistController private constructor(
+    private val detector: GameDetector,
+    private val physicsConfig: PhysicsConfig,
+    private val physics: PhysicsEngine,
+    private val config: AssistConfig,
 ) {
+    constructor() : this(buildDefault())
+
+    companion object {
+        private fun buildDefault(): Quadruple {
+            val cfg = PhysicsConfig.load()
+            return Quadruple(
+                detector = GameDetector(),
+                physicsConfig = cfg,
+                physics = PhysicsEngine(FieldBounds(0.0, 0.0, 1.0, 1.0), cfg),
+                config = AssistConfig(maxShotPower = cfg.maxShotPower, maxShotSpeed = cfg.maxShotSpeed),
+            )
+        }
+    }
+
+    private data class Quadruple(
+        val detector: GameDetector,
+        val physicsConfig: PhysicsConfig,
+        val physics: PhysicsEngine,
+        val config: AssistConfig,
+    )
+
+    private constructor(parts: Quadruple) : this(
+        parts.detector,
+        parts.physicsConfig,
+        parts.physics,
+        parts.config,
+    )
     fun process(bitmap: Bitmap): OverlayState {
         val detection = detector.detect(bitmap)
         val bounds = detection.bounds ?: return OverlayState(
