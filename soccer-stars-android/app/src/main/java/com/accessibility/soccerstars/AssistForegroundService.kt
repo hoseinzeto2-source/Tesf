@@ -80,6 +80,7 @@ class AssistForegroundService : Service() {
         assistEnabled = AppPreferences.assistEnabled(this)
         showDebug = AppPreferences.showDebug(this)
         controller = AssistController(
+            context = applicationContext,
             physicsPath = PhysicsStorage.physicsFile(applicationContext).absolutePath,
             rulerExtensionPx = AppPreferences.rulerExtension(this),
             showPuckPath = AppPreferences.showPuckPath(this),
@@ -243,11 +244,28 @@ class AssistForegroundService : Service() {
             val image = reader.acquireLatestImage() ?: return@setOnImageAvailableListener
             processing = true
             try {
+                val ctrl = controller ?: return@setOnImageAvailableListener
+
+                if (AccessibilityHelper.isEnabled(this@AssistForegroundService) &&
+                    !ForegroundAppTracker.isSoccerStarsForeground()
+                ) {
+                    val pkg = ForegroundAppTracker.currentPackage()
+                    val state = OverlayState(
+                        active = false,
+                        statusText = AccessibilityHelper.statusLabel(this@AssistForegroundService, pkg),
+                        scenePhase = com.accessibility.soccerstars.vision.ScenePhase.MENU_OR_HOME,
+                    )
+                    mainHandler.post {
+                        overlayView?.updateState(state)
+                        processing = false
+                    }
+                    return@setOnImageAvailableListener
+                }
+
                 val full = image.toBitmap()
                 val scaled = scaleBitmap(full, processScale)
                 if (scaled !== full) full.recycle()
 
-                val ctrl = controller ?: return@setOnImageAvailableListener
                 val invScale = 1f / processScale
                 val state = if (assistEnabled) {
                     ctrl.process(scaled, invScale)

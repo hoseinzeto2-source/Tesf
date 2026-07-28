@@ -4,18 +4,19 @@
 
 ## دانلود APK
 
-**نسخه 1.0.2 (جدید):** `releases/SoccerStarsAssist-v1.0.2.apk`
+**نسخه 1.0.4 (جدید):** `releases/SoccerStarsAssist-v1.0.4.apk`
 
 لینک مستقیم:
-`https://github.com/hoseinzeto2-source/Tesf/releases/download/v1.0.2/SoccerStarsAssist-v1.0.2.apk`
+`https://github.com/hoseinzeto2-source/Tesf/releases/download/v1.0.4/SoccerStarsAssist-v1.0.4.apk`
 
-### تغییرات v1.0.2
-- منوی شناور ImGui-style داخل بازی (قابل جابجایی)
-- تشخیص بهتر مهره‌های قرمز/آبی و خط زرد هدف
-- نمایش دایره‌های debug برای دقت تشخیص
-- HUD وضعیت با درصد دقت
+### تغییرات v1.0.4
+- تشخیص هوشمند «داخل مسابقه» در برابر «صفحه اصلی/منو»
+- کالیبره رنگ‌ها از assetهای واقعی APK بازی (BrazilField, ball0, blue puck)
+- تشخیص زمین با اسکن ردیفی (نه کل صفحه)
+- فیلتر حلقه سفید دور مهره‌ها برای کاهش تشخیص اشتباه
+- نمایش وضعیت صحنه در HUD (مسابقه / منو / نامشخص)
 
-**نسخه‌های قبلی:** v1.0.1، v1.0.0
+**نسخه‌های قبلی:** v1.0.3، v1.0.2، v1.0.1، v1.0.0
 
 ## نصب
 

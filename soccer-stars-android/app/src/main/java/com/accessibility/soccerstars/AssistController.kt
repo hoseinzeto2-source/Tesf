@@ -1,5 +1,6 @@
 package com.accessibility.soccerstars
 
+import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.PointF
 import android.graphics.RectF
@@ -16,6 +17,7 @@ import kotlin.math.hypot
 import kotlin.math.min
 
 class AssistController(
+    private val context: Context,
     physicsPath: String,
     private val rulerExtensionPx: Double = 280.0,
     private val showPuckPath: Boolean = true,
@@ -28,6 +30,8 @@ class AssistController(
     private val physics = PhysicsEngine(FieldBounds(0.0, 0.0, 1.0, 1.0), physicsConfig)
 
     fun process(bitmap: Bitmap, scale: Float): OverlayState {
+        foregroundBlockedState()?.let { return it }
+
         val detection = detector.detect(bitmap)
 
         if (detection.scene == ScenePhase.MENU_OR_HOME) {
@@ -109,8 +113,22 @@ class AssistController(
         )
     }
 
-    fun detectOnly(bitmap: Bitmap, scale: Float): OverlayState =
-        idle("راهنما خاموش است — از منو روشن کنید", detector.detect(bitmap), scale)
+    fun detectOnly(bitmap: Bitmap, scale: Float): OverlayState {
+        foregroundBlockedState()?.let { return it }
+        return idle("راهنما خاموش است — از منو روشن کنید", detector.detect(bitmap), scale)
+    }
+
+    private fun foregroundBlockedState(): OverlayState? {
+        if (!AccessibilityHelper.isEnabled(context)) return null
+        if (ForegroundAppTracker.isSoccerStarsForeground()) return null
+        val pkg = ForegroundAppTracker.currentPackage()
+        return OverlayState(
+            active = false,
+            statusText = AccessibilityHelper.statusLabel(context, pkg),
+            scenePhase = ScenePhase.MENU_OR_HOME,
+            confidence = 0f,
+        )
+    }
 
     private fun idle(message: String, detection: FrameDetection, scale: Float) = OverlayState(
         active = false,

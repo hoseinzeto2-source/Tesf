@@ -50,12 +50,18 @@ class MainActivity : AppCompatActivity() {
             startActivity(Intent(this, SettingsActivity::class.java))
         }
         binding.grantOverlayButton.setOnClickListener { requestOverlayPermission() }
+        binding.grantAccessibilityButton.setOnClickListener { requestAccessibility() }
         binding.overlayHelpButton.setOnClickListener {
             OverlayPermissionHelper.showManualGuideIfNeeded(this)
         }
         binding.stepOverlayCard.setOnClickListener {
             if (!OverlayPermissionHelper.isGranted(this)) {
                 requestOverlayPermission()
+            }
+        }
+        binding.stepAccessibilityCard.setOnClickListener {
+            if (!AccessibilityHelper.isEnabled(this)) {
+                AccessibilityHelper.showGuide(this)
             }
         }
         requestNotificationPermissionIfNeeded()
@@ -79,6 +85,8 @@ class MainActivity : AppCompatActivity() {
 
     private fun updateUi() {
         val overlayGranted = OverlayPermissionHelper.isGranted(this)
+        val accessibilityGranted = AccessibilityHelper.isEnabled(this)
+        val ready = overlayGranted && accessibilityGranted
 
         setStepState(
             binding.stepOverlayIcon,
@@ -89,9 +97,17 @@ class MainActivity : AppCompatActivity() {
         )
 
         setStepState(
+            binding.stepAccessibilityIcon,
+            binding.stepAccessibilityStatus,
+            accessibilityGranted,
+            R.string.step_accessibility_done,
+            R.string.step_accessibility_pending,
+        )
+
+        setStepState(
             binding.stepCaptureIcon,
             binding.stepCaptureStatus,
-            overlayGranted,
+            ready,
             R.string.step_capture_ready,
             R.string.step_capture_locked,
         )
@@ -99,25 +115,30 @@ class MainActivity : AppCompatActivity() {
         setStepState(
             binding.stepPlayIcon,
             binding.stepPlayStatus,
-            overlayGranted,
+            ready,
             R.string.step_play_ready,
             R.string.step_play_locked,
         )
 
         binding.grantOverlayButton.visibility = if (overlayGranted) View.GONE else View.VISIBLE
         binding.overlayHelpButton.visibility = if (overlayGranted) View.GONE else View.VISIBLE
-        binding.startButton.isEnabled = overlayGranted
-        binding.startButton.alpha = if (overlayGranted) 1f else 0.55f
+        binding.grantAccessibilityButton.visibility = if (accessibilityGranted) View.GONE else View.VISIBLE
+        binding.startButton.isEnabled = ready
+        binding.startButton.alpha = if (ready) 1f else 0.55f
         binding.statusChip.text = getString(
-            if (overlayGranted) R.string.status_ready else R.string.status_need_overlay,
+            when {
+                !overlayGranted -> R.string.status_need_overlay
+                !accessibilityGranted -> R.string.status_need_accessibility
+                else -> R.string.status_ready
+            },
         )
         binding.statusChip.setChipBackgroundColorResource(
-            if (overlayGranted) R.color.chip_ok_bg else R.color.chip_warn_bg,
+            if (ready) R.color.chip_ok_bg else R.color.chip_warn_bg,
         )
         binding.statusChip.setTextColor(
             ContextCompat.getColor(
                 this,
-                if (overlayGranted) R.color.chip_ok_text else R.color.chip_warn_text,
+                if (ready) R.color.chip_ok_text else R.color.chip_warn_text,
             ),
         )
     }
@@ -142,9 +163,17 @@ class MainActivity : AppCompatActivity() {
         Toast.makeText(this, R.string.overlay_toast_return, Toast.LENGTH_LONG).show()
     }
 
+    private fun requestAccessibility() {
+        AccessibilityHelper.showGuide(this)
+    }
+
     private fun startAssistFlow() {
         if (!OverlayPermissionHelper.isGranted(this)) {
             OverlayPermissionHelper.showManualGuideIfNeeded(this)
+            return
+        }
+        if (!AccessibilityHelper.isEnabled(this)) {
+            AccessibilityHelper.showGuide(this)
             return
         }
         val manager = getSystemService(MediaProjectionManager::class.java)
