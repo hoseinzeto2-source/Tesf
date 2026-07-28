@@ -9,18 +9,20 @@ import com.accessibility.soccerstars.physics.PhysicsEngine
 import com.accessibility.soccerstars.physics.ShotInput
 import com.accessibility.soccerstars.vision.FrameDetection
 import com.accessibility.soccerstars.vision.GameDetector
+import java.io.File
 import kotlin.math.hypot
 import kotlin.math.min
 
 class AssistController(
-    physicsPath: String = PhysicsConfig.DEFAULT_PATH,
+    physicsPath: String,
     private val rulerExtensionPx: Double = 280.0,
     private val showPuckPath: Boolean = true,
 ) {
-    private val physicsConfig: PhysicsConfig = PhysicsConfig.load(physicsPath)
-    private val detector = GameDetector(
-        maxShotPower = physicsConfig.maxShotPower,
-    )
+    private val physicsConfig: PhysicsConfig = run {
+        val file = File(physicsPath)
+        if (file.exists() && file.length() > 0) PhysicsConfig.load(file) else PhysicsConfig()
+    }
+    private val detector = GameDetector(maxShotPower = physicsConfig.maxShotPower)
     private val physics = PhysicsEngine(FieldBounds(0.0, 0.0, 1.0, 1.0), physicsConfig)
 
     fun process(bitmap: Bitmap, scale: Float): OverlayState {

@@ -18,7 +18,7 @@
         android:roundIcon="@drawable/ic_launcher_foreground"
         android:supportsRtl="true"
         android:theme="@style/Theme.SoccerStarsAssist"
-        android:requestLegacyExternalStorage="true">
+        android:requestLegacyExternalStorage="false">
 
         <activity
             android:name=".MainActivity"

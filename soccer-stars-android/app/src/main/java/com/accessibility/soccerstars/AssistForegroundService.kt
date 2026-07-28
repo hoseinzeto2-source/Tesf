@@ -25,6 +25,7 @@ import android.provider.Settings
 import android.util.DisplayMetrics
 import android.view.Gravity
 import android.view.WindowManager
+import com.accessibility.soccerstars.physics.PhysicsStorage
 import androidx.core.app.NotificationCompat
 
 class AssistForegroundService : Service() {
@@ -70,9 +71,10 @@ class AssistForegroundService : Service() {
             return START_NOT_STICKY
         }
 
+        PhysicsStorage.ensureDefault(applicationContext)
         processScale = AppPreferences.processScale(this)
         controller = AssistController(
-            physicsPath = AppPreferences.physicsConfigPath(this),
+            physicsPath = PhysicsStorage.physicsFile(applicationContext).absolutePath,
             rulerExtensionPx = AppPreferences.rulerExtension(this),
             showPuckPath = AppPreferences.showPuckPath(this),
         )

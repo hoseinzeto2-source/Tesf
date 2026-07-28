@@ -2,7 +2,7 @@ package com.accessibility.soccerstars
 
 import android.content.Context
 import android.content.SharedPreferences
-import com.accessibility.soccerstars.physics.PhysicsConfig
+import com.accessibility.soccerstars.physics.PhysicsStorage
 
 object AppPreferences {
     private const val PREFS = "soccer_stars_assist_prefs"
@@ -41,8 +41,6 @@ object AppPreferences {
             .apply()
     }
 
-    fun physicsConfigPath(context: Context): String {
-        val custom = prefs(context).getString("physics_path", null)
-        return custom ?: PhysicsConfig.DEFAULT_PATH
-    }
+    fun physicsConfigPath(context: Context): String =
+        PhysicsStorage.physicsFile(context).absolutePath
 }
