@@ -8,114 +8,226 @@
 #include <EGL/egl.h>
 #include <jni.h>
 #include <mutex>
+#include <pthread.h>
+#include <unistd.h>
+#include <chrono>
 
 #define LOG_TAG "SSMResearchHUD"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
+#define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
+
+static const char* kGameLib = "libgame-SSM-GooglePlay-Gold-Release-Module-1013.so";
+static const char* kChoreographerSym =
+    "Java_com_miniclip_windowmanager_NativeWindowRenderer_onChoreographer";
 
 static EGLBoolean (*real_eglSwapBuffers)(EGLDisplay, EGLSurface) = nullptr;
-static bool imgui_ready = false;
-static int frame_counter = 0;
-static std::vector<BodySample> cached_bodies;
-static float cached_velocity = 0.f;
-static int cached_debug = 0;
-static std::mutex data_mutex;
+static void (*real_onChoreographer)(JNIEnv*, jclass, jlong) = nullptr;
 
-static void refreshTelemetry() {
-    if (frame_counter++ % 15 != 0) return;
-    auto bodies = scanBodies(12);
-    float vel = readInternalVelocity();
-    int dbg = readPhysicsDebug();
+static bool imgui_ready = false;
+static bool choreographer_hooked = false;
+static bool egl_hooked = false;
+static int swap_frames = 0;
+static int choreo_frames = 0;
+static std::mutex data_mutex;
+static MatchSnapshot cached_snap;
+static EGLDisplay cached_dpy = EGL_NO_DISPLAY;
+static EGLSurface cached_surf = EGL_NO_SURFACE;
+static auto last_time = std::chrono::steady_clock::now();
+
+static void tryInitImGui(EGLDisplay dpy, EGLSurface surface) {
+    if (imgui_ready) return;
+    if (dpy == EGL_NO_DISPLAY || surface == EGL_NO_SURFACE) return;
+
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    ImGui::StyleColorsDark();
+    ImGuiStyle& style = ImGui::GetStyle();
+    style.WindowRounding = 6.f;
+    style.Alpha = 0.94f;
+    ImGui::GetStyle().ScaleAllSizes(2.0f);
+
+    if (!ImGui_ImplOpenGL3_Init("#version 300 es")) {
+        LOGE("ImGui_ImplOpenGL3_Init failed");
+        return;
+    }
+    imgui_ready = true;
+    enablePhysicsDebug();
+    LOGI("ImGui ready (GLES3)");
+}
+
+static void updateDisplaySize(EGLDisplay dpy, EGLSurface surface) {
+    if (dpy == EGL_NO_DISPLAY || surface == EGL_NO_SURFACE) return;
+    EGLint w = 0, h = 0;
+    eglQuerySurface(dpy, surface, EGL_WIDTH, &w);
+    eglQuerySurface(dpy, surface, EGL_HEIGHT, &h);
+    if (w <= 0 || h <= 0) return;
+
+    auto now = std::chrono::steady_clock::now();
+    float dt = std::chrono::duration<float>(now - last_time).count();
+    last_time = now;
+    if (dt <= 0.f || dt > 0.5f) dt = 1.f / 60.f;
+
+    ImGuiIO& io = ImGui::GetIO();
+    io.DisplaySize = ImVec2((float)w, (float)h);
+    io.DeltaTime = dt;
+    io.FontGlobalScale = 1.15f;
+}
+
+static void refreshTelemetry(int w, int h) {
+    MatchSnapshot snap = buildMatchSnapshot(w, h, choreographer_hooked, egl_hooked, swap_frames);
+    snap.frame_counter = choreo_frames;
     std::lock_guard<std::mutex> lock(data_mutex);
-    cached_bodies = std::move(bodies);
-    cached_velocity = vel;
-    cached_debug = dbg;
+    cached_snap = snap;
 }
 
 static void drawResearchHud() {
-    ImGui::SetNextWindowPos(ImVec2(12, 12), ImGuiCond_FirstUseEver);
-    ImGui::SetNextWindowSize(ImVec2(360, 420), ImGuiCond_FirstUseEver);
-    ImGui::Begin("SSM Research HUD (Bug Bounty / Education)",
-                 nullptr,
-                 ImGuiWindowFlags_NoCollapse);
+    ImGui::SetNextWindowPos(ImVec2(8, 8), ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2(400, 520), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowBgAlpha(0.88f);
 
-    ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.f, 1.f), "READ-ONLY — University RE Lab");
-    ImGui::Separator();
+    ImGui::Begin("SSM Match HUD [Research]",
+                 nullptr,
+                 ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_AlwaysAutoResize);
 
     std::lock_guard<std::mutex> lock(data_mutex);
-    ImGui::Text("Physics debug: %d", cached_debug);
-    ImGui::Text("sInternalVelocity: %.4f", cached_velocity);
-    ImGui::Text("Bodies (norm XY): %d", (int)cached_bodies.size());
-    ImGui::Text("Z axis: N/A (2D field)");
+    const MatchSnapshot& s = cached_snap;
 
-  if (ImGui::BeginTable("bodies", 5, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg)) {
-        ImGui::TableSetupColumn("X");
-        ImGui::TableSetupColumn("Y");
-        ImGui::TableSetupColumn("Vx");
-        ImGui::TableSetupColumn("Vy");
-        ImGui::TableSetupColumn("Spd");
-        ImGui::TableHeadersRow();
-        for (const auto& b : cached_bodies) {
-            ImGui::TableNextRow();
-            ImGui::TableSetColumnIndex(0);
-            ImGui::Text("%.3f", b.x);
-            ImGui::TableSetColumnIndex(1);
-            ImGui::Text("%.3f", b.y);
-            ImGui::TableSetColumnIndex(2);
-            ImGui::Text("%.3f", b.vx);
-            ImGui::TableSetColumnIndex(3);
-            ImGui::Text("%.3f", b.vy);
-            ImGui::TableSetColumnIndex(4);
-            ImGui::Text("%.3f", b.speed);
-        }
-        ImGui::EndTable();
-    }
+    ImGui::TextColored(ImVec4(0.3f, 1.f, 0.5f, 1.f), "READ-ONLY | Bug Bounty Lab");
+    ImGui::Separator();
+
+    ImGui::Text("HUD frames: %d  |  swap: %d", s.frame_counter, s.swap_frames);
+    ImGui::Text("Hooks: choreo=%s egl=%s",
+                s.choreographer_hooked ? "OK" : "no",
+                s.egl_hooked ? "OK" : "no");
+    ImGui::Text("Display: %dx%d", s.display_w, s.display_h);
 
     ImGui::Separator();
-    ImGui::TextWrapped(
-        "Educational overlay. No shot injection. Online scores remain server-side.");
+    ImGui::Text("MATCH");
+    if (s.score_home >= 0 && s.score_away >= 0)
+        ImGui::Text("Score (heap est.): %d : %d", (int)s.score_home, (int)s.score_away);
+    else
+        ImGui::TextColored(ImVec4(1.f, 0.7f, 0.2f, 1.f), "Score: online/server (not in client)");
+
+  if (s.ball_valid) {
+        ImGui::Text("Ball X: %.4f  Y: %.4f", s.ball_x, s.ball_y);
+        ImGui::Text("Ball Vx: %.4f  Vy: %.4f", s.ball_vx, s.ball_vy);
+    } else {
+        ImGui::TextColored(ImVec4(1.f, 0.4f, 0.4f, 1.f), "Ball: enter a match first");
+    }
+    ImGui::Text("Pucks on field (est.): %d", s.puck_estimate);
+    ImGui::Text("Bodies tracked: %d", s.body_count);
+
+    ImGui::Separator();
+    ImGui::Text("PHYSICS");
+    ImGui::Text("sInternalVelocity: %.4f", s.internal_velocity);
+    ImGui::Text("physics_debug: %d", s.physics_debug);
+    ImGui::Text("Field: 2D (no Z axis)");
+
+    ImGui::Separator();
+    ImGui::TextWrapped("Educational overlay only. No shot injection.");
     ImGui::End();
 }
 
-static EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface) {
-    if (!imgui_ready) {
-        IMGUI_CHECKVERSION();
-        ImGui::CreateContext();
-        ImGui::StyleColorsDark();
-        ImGui_ImplOpenGL3_Init("#version 300 es");
-        imgui_ready = true;
-        LOGI("ImGui initialized on eglSwapBuffers");
-    }
+static void renderImGuiFrame(EGLDisplay dpy, EGLSurface surface) {
+    if (dpy == EGL_NO_DISPLAY || surface == EGL_NO_SURFACE) return;
 
-    refreshTelemetry();
+    cached_dpy = dpy;
+    cached_surf = surface;
+    tryInitImGui(dpy, surface);
+    if (!imgui_ready) return;
+
+    updateDisplaySize(dpy, surface);
+    EGLint w = (EGLint)ImGui::GetIO().DisplaySize.x;
+    EGLint h = (EGLint)ImGui::GetIO().DisplaySize.y;
+
+    if (choreo_frames % 10 == 0) refreshTelemetry(w, h);
 
     ImGui_ImplOpenGL3_NewFrame();
     ImGui::NewFrame();
     drawResearchHud();
     ImGui::Render();
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+}
 
+static EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface) {
+    swap_frames++;
+    renderImGuiFrame(dpy, surface);
+    if (!real_eglSwapBuffers) return EGL_FALSE;
     return real_eglSwapBuffers(dpy, surface);
 }
 
+static void hook_onChoreographer(JNIEnv* env, jclass clazz, jlong frameTime) {
+    choreo_frames++;
+    EGLDisplay dpy = eglGetCurrentDisplay();
+    EGLSurface surf = eglGetCurrentSurface(EGL_DRAW);
+    if (dpy != EGL_NO_DISPLAY && surf != EGL_NO_SURFACE) {
+        cached_dpy = dpy;
+        cached_surf = surf;
+    }
+    if (real_onChoreographer) real_onChoreographer(env, clazz, frameTime);
+}
+
 static void installEglHook() {
+    if (egl_hooked) return;
     void* egl = dlopen("libEGL.so", RTLD_NOW);
     if (!egl) {
-        LOGI("dlopen libEGL failed");
+        LOGE("dlopen libEGL failed");
         return;
     }
     void* sym = dlsym(egl, "eglSwapBuffers");
     if (!sym) {
-        LOGI("eglSwapBuffers not found");
+        LOGE("eglSwapBuffers missing");
         return;
     }
     A64HookFunction(sym, (void*)hook_eglSwapBuffers, (void**)&real_eglSwapBuffers);
+    egl_hooked = true;
     LOGI("eglSwapBuffers hooked");
+
+    void* sym2 = dlsym(egl, "eglSwapBuffersWithDamageKHR");
+    if (sym2 && !real_eglSwapBuffers) {
+        A64HookFunction(sym2, (void*)hook_eglSwapBuffers, (void**)&real_eglSwapBuffers);
+        LOGI("eglSwapBuffersWithDamageKHR hooked");
+    }
+}
+
+static void installChoreographerHook() {
+    if (choreographer_hooked) return;
+    void* game = dlopen(kGameLib, RTLD_NOLOAD);
+    if (!game) return;
+
+    void* sym = dlsym(game, kChoreographerSym);
+    if (!sym) {
+        LOGE("onChoreographer symbol not found");
+        return;
+    }
+    A64HookFunction(sym, (void*)hook_onChoreographer, (void**)&real_onChoreographer);
+    choreographer_hooked = true;
+    LOGI("NativeWindowRenderer.onChoreographer hooked");
+}
+
+static void* delayedHookThread(void*) {
+    for (int i = 0; i < 120; i++) {
+        installEglHook();
+        installChoreographerHook();
+        if (choreographer_hooked && egl_hooked) break;
+        usleep(500000);
+    }
+    if (!choreographer_hooked) LOGE("choreographer hook never installed");
+    if (!egl_hooked) LOGE("egl hook never installed");
+    return nullptr;
+}
+
+static void startDelayedHooks() {
+    installEglHook();
+    pthread_t t;
+    pthread_create(&t, nullptr, delayedHookThread, nullptr);
+    pthread_detach(t);
 }
 
 extern "C" JNIEXPORT jint JNI_OnLoad(JavaVM* vm, void* reserved) {
     (void)vm;
     (void)reserved;
-    LOGI("ssm_research_hud loaded — educational read-only HUD");
-    installEglHook();
+    LOGI("ssm_research_hud loaded");
+    startDelayedHooks();
     return JNI_VERSION_1_6;
 }
