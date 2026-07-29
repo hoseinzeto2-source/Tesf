@@ -15,6 +15,15 @@ KEYSTORE="$INJECT_DIR/keys/research.keystore"
 KS_PASS="android"
 KEY_ALIAS="research"
 
+# Remove only JAR signature files before re-signing. Do NOT delete META-INF/services/*
+# (Kotlin BuiltInsLoader, Ktor, etc.) — stripping all META-INF/* causes Play 1v1 crash.
+strip_jar_signatures() {
+  local apk="$1"
+  while IFS= read -r entry; do
+  [[ -n "$entry" ]] && zip -q -d "$apk" "$entry" || true
+  done < <(zipinfo -1 "$apk" | grep -E '^META-INF/.*\.(SF|RSA|DSA)$|^META-INF/MANIFEST\.MF$' || true)
+}
+
 if [[ ! -f "$INPUT" ]]; then
   echo "Input not found: $INPUT"
   echo "Download: curl -L -o downloads/so.apks https://dl.mr-cheat.ir/so.apks"
@@ -79,12 +88,12 @@ smali a "$WORK/dex-patch/smali" -o "$WORK/dex-patch/classes6.dex"
 
 echo "[4/7] Repacking base.apk (replace dex, keep binary resources) ..."
 cp "$WORK/apks/base.apk" "$WORK/base-patched.apk"
-zip -q -d "$WORK/base-patched.apk" 'META-INF/*' || true
+strip_jar_signatures "$WORK/base-patched.apk"
 (cd "$WORK/dex-patch" && zip -q -u "$WORK/base-patched.apk" classes6.dex)
 
 echo "[5/7] Injecting native lib into arm64 split (STORED, no re-compress) ..."
 cp "$WORK/apks/split_config.arm64_v8a.apk" "$WORK/split-patched.apk"
-zip -q -d "$WORK/split-patched.apk" 'META-INF/*' || true
+strip_jar_signatures "$WORK/split-patched.apk"
 mkdir -p "$WORK/split-add/lib/arm64-v8a"
 cp "$LIB_SO" "$WORK/split-add/lib/arm64-v8a/libssm_research_hud.so"
 (cd "$WORK/split-add" && zip -q -0 -u "$WORK/split-patched.apk" lib/arm64-v8a/libssm_research_hud.so)
