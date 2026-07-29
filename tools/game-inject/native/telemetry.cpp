@@ -44,6 +44,11 @@ int getHookPatchedCount() {
     return g_hooks_patched;
 }
 
+int getHookEventCount() {
+    std::lock_guard<std::mutex> lock(g_hook_mutex);
+    return g_hook_events;
+}
+
 void resetLiveScanState() {
     g_syms.resolved = false;
     std::lock_guard<std::mutex> lock(g_hook_mutex);

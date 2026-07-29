@@ -52,6 +52,7 @@ static std::unordered_set<void*> g_wrapped_source_imps;
 static std::unordered_set<void*> g_wrapped_methods;
 static thread_local bool g_in_hook_dispatch = false;
 static int g_classes_scanned = 0;
+static int g_watch_methods_found = 0;
 static int g_poll_ticks = 0;
 
 struct ImpSlot {
@@ -73,6 +74,7 @@ static bool isWatchSelector(const char* name) {
         "networkEventShotOutcome:",
         "networkEventGameStarted:",
         "networkEventAnimateShot:",
+        "networkEventSessionState:",
         nullptr,
     };
     for (int i = 0; kExact[i]; i++) {
@@ -120,7 +122,8 @@ static void dispatchHook(void* sel, void* arg) {
 
     if (isNetworkGameStarted(name)) {
         ok = parseGameStartedObject(arg, snap) || parseNetworkRequest(arg, snap);
-    } else if (isNetworkShotOutcome(name) || isAnimateShot(name)) {
+    } else if (isNetworkShotOutcome(name) || isAnimateShot(name) ||
+               strcmp(name, "networkEventSessionState:") == 0) {
         ok = parseNetworkRequest(arg, snap);
     } else if (strcmp(name, "setShotOutcome:") == 0 || strcmp(name, "shotOutcomeUpdateProcess:") == 0) {
         ok = parseShotOutcomeObject(arg, snap);
@@ -217,15 +220,18 @@ static void* wrapImpIfNeeded(void* imp, const char* sel_name) {
     return hook_slot_ptrs[slot];
 }
 
-static void wrapSingleMethod(void* method) {
-    if (!method || !method_getName_fn || !sel_getName_fn || !real_method_getImplementation ||
-        !real_method_setImplementation) {
-        return;
-    }
+static void wrapSingleMethod(void* method, bool count_only = false) {
+    if (!method || !method_getName_fn || !sel_getName_fn) return;
 
     void* sel = method_getName_fn(method);
     const char* name = sel_getName_fn(sel);
     if (!isWatchSelector(name)) return;
+
+    g_watch_methods_found++;
+
+    if (count_only) return;
+
+    if (!real_method_getImplementation || !real_method_setImplementation) return;
 
     std::lock_guard<std::mutex> lock(g_wrap_mutex);
     if (g_wrapped_methods.count(method)) return;
@@ -311,6 +317,7 @@ static void scanAllRegisteredClasses() {
 
     int wrapped_before = g_slot_count;
     int classes = 0;
+    g_watch_methods_found = 0;
 
     for (int i = 0; i < count; i++) {
         void* name_entry = class_name_entry_fn(table_meta, static_cast<uintptr_t>(i));
@@ -436,4 +443,54 @@ bool gameHooksInstalled() {
 
 int gameClassesScanned() {
     return g_classes_scanned;
+}
+
+int gameWatchMethodsFound() {
+    return g_watch_methods_found;
+}
+
+void forceRescanHooks() {
+    if (!isGameLibLoaded()) return;
+    refreshReadableMaps();
+    g_watch_methods_found = 0;
+    scanAllRegisteredClasses();
+    LOGI("forceRescan: classes=%d hooks=%d watch=%d", g_classes_scanned, g_slot_count,
+         g_watch_methods_found);
+}
+
+void runHookDiagnostics(HookDiagnostics& out) {
+    memset(&out, 0, sizeof(out));
+    out.libgame_loaded = isGameLibLoaded();
+    out.hooks_installed = g_hooks_installed;
+    out.classes_scanned = g_classes_scanned;
+    out.hooks_patched = g_slot_count;
+    out.watch_methods_found = g_watch_methods_found;
+    out.hook_events = getHookEventCount();
+
+    uintptr_t base = gameLibBase();
+    void* table_meta = nullptr;
+    if (base) {
+        void** global = reinterpret_cast<void**>(base + kOffGlobalClassTable);
+        out.class_table_ok = safeRead(global, &table_meta, sizeof(void*)) && table_meta != nullptr;
+    }
+
+    if (lookup_class_fn) {
+        void* menu = lookup_class_fn("MenuManager");
+        snprintf(out.report, sizeof(out.report),
+                 "libgame=%s hooks=%d/%d watch=%d classes=%d table=%s MenuManager=%s base=%p",
+                 out.libgame_loaded ? "OK" : "NO",
+                 out.hooks_patched, kMaxImpHooks, out.watch_methods_found, out.classes_scanned,
+                 out.class_table_ok ? "OK" : "FAIL",
+                 menu ? "OK" : "MISS",
+                 (void*)base);
+    } else {
+        snprintf(out.report, sizeof(out.report), "objc runtime not ready (enter match first)");
+    }
+
+    if (out.hooks_patched == 0 && out.libgame_loaded) {
+        forceRescanHooks();
+        out.classes_scanned = g_classes_scanned;
+        out.hooks_patched = g_slot_count;
+        out.watch_methods_found = g_watch_methods_found;
+    }
 }

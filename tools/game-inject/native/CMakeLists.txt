@@ -11,6 +11,7 @@ add_library(ssm_research_hud SHARED
     telemetry.cpp
     memory_safe.cpp
     game_hooks.cpp
+    touch_input.cpp
     ${IMGUI_DIR}/imgui.cpp
     ${IMGUI_DIR}/imgui_draw.cpp
     ${IMGUI_DIR}/imgui_tables.cpp
@@ -33,4 +34,5 @@ target_link_libraries(ssm_research_hud
     EGL
     GLESv3
     android
+    jnigraphics
 )

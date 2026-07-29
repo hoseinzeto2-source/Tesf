@@ -53,4 +53,5 @@ bool parseNetworkRequest(const void* req, MatchSnapshot& out);
 void commitHookSnapshot(const MatchSnapshot& snap, const char* sel_name);
 void mergeHookSnapshot(MatchSnapshot& dst);
 int getHookPatchedCount();
+int getHookEventCount();
 void telemetrySetHookPatchedCount(int n);
