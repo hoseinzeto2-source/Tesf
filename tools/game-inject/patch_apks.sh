@@ -62,27 +62,42 @@ unzip -q -o "$WORK/apks/base.apk" classes6.dex -d "$WORK/dex-patch"
 baksmali d "$WORK/dex-patch/classes6.dex" -o "$WORK/dex-patch/smali"
 
 SMALI="$WORK/dex-patch/smali/androidx/multidex/MultiDexApplication.smali"
-if ! grep -q "ssm_research_hud" "$SMALI"; then
-  SMALI_PATH="$SMALI" python3 <<'PY'
+SMALI_PATH="$SMALI" python3 <<'PY'
 import os
 from pathlib import Path
 p = Path(os.environ["SMALI_PATH"])
 text = p.read_text()
-old = """    invoke-static {p0}, Landroidx/multidex/MultiDex;->install(Landroid/content/Context;)V
 
-    return-void"""
-new = """    invoke-static {p0}, Landroidx/multidex/MultiDex;->install(Landroid/content/Context;)V
+early = """    invoke-static {p0}, Landroidx/multidex/MultiDex;->install(Landroid/content/Context;)V
 
     const-string v0, "ssm_research_hud"
 
     invoke-static {v0}, Ljava/lang/System;->loadLibrary(Ljava/lang/String;)V
 
     return-void"""
-if old not in text:
-    raise SystemExit("smali patch anchor not found in MultiDexApplication.attachBaseContext")
-p.write_text(text.replace(old, new, 1))
+early_ok = """    invoke-static {p0}, Landroidx/multidex/MultiDex;->install(Landroid/content/Context;)V
+
+    return-void"""
+if early in text:
+    text = text.replace(early, early_ok, 1)
+
+on_old = """    invoke-super {p0}, Landroid/app/Application;->onCreate()V
+
+    return-void"""
+on_new = """    invoke-super {p0}, Landroid/app/Application;->onCreate()V
+
+    const-string v0, "ssm_research_hud"
+
+    invoke-static {v0}, Ljava/lang/System;->loadLibrary(Ljava/lang/String;)V
+
+    return-void"""
+if on_new in text:
+    p.write_text(text)
+    raise SystemExit(0)
+if on_old not in text:
+    raise SystemExit("smali patch anchor not found in MultiDexApplication.onCreate")
+p.write_text(text.replace(on_old, on_new, 1))
 PY
-fi
 
 smali a "$WORK/dex-patch/smali" -o "$WORK/dex-patch/classes6.dex"
 

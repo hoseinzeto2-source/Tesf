@@ -51,7 +51,6 @@ static void tryInitImGui(EGLDisplay dpy, EGLSurface surface) {
         return;
     }
     imgui_ready = true;
-    enablePhysicsDebug();
     LOGI("ImGui ready (GLES3)");
 }
 

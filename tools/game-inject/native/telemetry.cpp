@@ -73,9 +73,8 @@ std::vector<BodySample> scanBodies(int maxBodies) {
 }
 
 static void* gameHandle() {
-    void* handle = dlopen(kGameLib, RTLD_NOLOAD);
-    if (!handle) handle = dlopen(kGameLib, RTLD_NOW);
-    return handle;
+    // Never RTLD_NOW — loading libgame before the game does can break JNI / SDK init.
+    return dlopen(kGameLib, RTLD_NOLOAD);
 }
 
 float readInternalVelocity() {
@@ -137,6 +136,19 @@ MatchSnapshot buildMatchSnapshot(int displayW, int displayH, bool choreoHook, bo
     snap.choreographer_hooked = choreoHook;
     snap.egl_hooked = eglHook;
     snap.swap_frames = swapFrames;
+
+    void* game = gameHandle();
+    if (!game) {
+        snap.internal_velocity = 0.f;
+        snap.physics_debug = 0;
+        snap.body_count = 0;
+        snap.puck_estimate = 0;
+        snap.ball_valid = false;
+        snap.score_home = -1.f;
+        snap.score_away = -1.f;
+        return snap;
+    }
+
     snap.internal_velocity = readInternalVelocity();
     snap.physics_debug = readPhysicsDebug();
 
