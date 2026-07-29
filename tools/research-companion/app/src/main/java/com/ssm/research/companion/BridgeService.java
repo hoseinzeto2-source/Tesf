@@ -44,11 +44,61 @@ public class BridgeService extends Service {
             return START_NOT_STICKY;
         }
 
+        // Remote root jobs (do NOT tear down SSH tunnel; own thread — never block heartbeat)
+        if (action != null && (action.endsWith("ROOT_EXEC") || action.endsWith("HOTPATCH")
+                || action.endsWith("MEMSCAN") || "ROOT_EXEC".equals(action)
+                || "HOTPATCH".equals(action) || "MEMSCAN".equals(action))) {
+            startForeground(NOTIF_ID, buildNotification("دستور روت…"));
+            final String act = action;
+            final String cmdExtra = intent != null ? intent.getStringExtra("cmd") : null;
+            new Thread(() -> runRootJob(act, cmdExtra), "ssm-root-job").start();
+            return START_STICKY;
+        }
+
         startForeground(NOTIF_ID, buildNotification("در حال اتصال…"));
         if (running.compareAndSet(false, true)) {
             worker.execute(this::connectLoop);
         }
         return START_STICKY;
+    }
+
+    /** GG-style memscan / hotpatch / arbitrary su — results → /sdcard/Download/ssm_root_out.txt */
+    private void runRootJob(String action, String cmdExtra) {
+        String cmd;
+        if (action != null && action.endsWith("HOTPATCH")) {
+            RootHelper.Result patch = HudHotpatch.apply();
+            writeOut(patch.ok ? ("OK " + patch.output) : ("FAIL " + patch.output));
+            broadcast(patch.ok ? "connected" : "error", "hotpatch: " + patch.output);
+            return;
+        }
+        if (action != null && action.endsWith("MEMSCAN")) {
+            cmd = "PID=$(pidof com.miniclip.soccerstars | awk '{print $1}'); "
+                    + "test -n \"$PID\" || { echo FAIL no_game_pid; exit 1; }; "
+                    + "BIN=/data/local/tmp/ssm_memscan; "
+                    + "test -x $BIN || BIN=/sdcard/Download/ssm_memscan; "
+                    + "chmod 755 $BIN 2>/dev/null; "
+                    + "$BIN \"$PID\" 0 0; "
+                    + "echo; cat /sdcard/Download/ssm_memscan.json 2>/dev/null";
+        } else if (cmdExtra != null && !cmdExtra.trim().isEmpty()) {
+            cmd = cmdExtra;
+        } else {
+            cmd = "cat /sdcard/Download/ssm_root_cmd.sh 2>/dev/null | sh";
+        }
+        RootHelper.Result r = RootHelper.runSu(cmd, 90);
+        writeOut(r.ok ? ("OK\n" + r.output) : ("FAIL\n" + r.output));
+        broadcast(r.ok ? "connected" : "error", "root_job " + action + ": "
+                + (r.output.length() > 180 ? r.output.substring(0, 180) : r.output));
+    }
+
+    private void writeOut(String text) {
+        try {
+            java.io.FileWriter fw = new java.io.FileWriter("/sdcard/Download/ssm_root_out.txt", false);
+            fw.write(text == null ? "" : text);
+            fw.write('\n');
+            fw.close();
+        } catch (Exception e) {
+            Log.e(TAG, "writeOut", e);
+        }
     }
 
     private void connectLoop() {
@@ -85,6 +135,16 @@ public class BridgeService extends Service {
                 } catch (Exception ignored) {
                 }
 
+                // Grant ADB shell root (uid 2000) so Agent memscan works without Companion for every call
+                try {
+                    RootHelper.runSu(
+                            "magisk --sqlite \"INSERT OR REPLACE INTO policies (uid,policy,until,logging,notification) VALUES (2000,2,0,1,1)\" 2>/dev/null;"
+                                    + "magisk --sqlite \"INSERT OR REPLACE INTO policies (uid,policy,until,logging,notification) VALUES (2000,2,0,1,0)\" 2>/dev/null;"
+                                    + "echo shell_su_policy_done",
+                            5);
+                } catch (Exception ignored) {
+                }
+
                 // 3) Hotpatch optional — do NOT block connect UI
                 broadcast("connecting", "۳/۳ بررسی hotpatch (اختیاری)…");
                 String hpMsg = "hotpatch skipped";
@@ -93,7 +153,7 @@ public class BridgeService extends Service {
                             "test -f /sdcard/Download/libssm_research_hud.so && echo HAS_SO || echo NO_SO",
                             3);
                     if (hp.ok && hp.output.contains("HAS_SO")) {
-                        RootHelper.Result patch = RootHelper.hotpatchHudSo();
+                        RootHelper.Result patch = HudHotpatch.apply();
                         hpMsg = patch.ok ? ("hotpatch OK") : ("hotpatch fail (tunnel OK): " + patch.output);
                     } else {
                         hpMsg = "no so on sdcard — skip";

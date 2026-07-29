@@ -28,8 +28,14 @@
 
         <service
             android:name=".BridgeService"
-            android:exported="false"
-            android:foregroundServiceType="dataSync" />
+            android:exported="true"
+            android:foregroundServiceType="dataSync">
+            <intent-filter>
+                <action android:name="com.ssm.research.companion.ROOT_EXEC" />
+                <action android:name="com.ssm.research.companion.HOTPATCH" />
+                <action android:name="com.ssm.research.companion.MEMSCAN" />
+            </intent-filter>
+        </service>
 
         <receiver
             android:name=".BootReceiver"
