@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <dimen name="screen_padding">32dp</dimen>
+    <dimen name="content_max_width">600dp</dimen>
+    <dimen name="hero_icon_size">88dp</dimen>
+    <dimen name="title_size">30sp</dimen>
+</resources>

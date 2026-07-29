@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="bg_deep">#0A1018</color>
+    <color name="bg_card">#141E2B</color>
+    <color name="bg_card_stroke">#243044</color>
+    <color name="accent">#1B998B</color>
+    <color name="accent_dark">#14746F</color>
+    <color name="accent_glow">#33D4C5</color>
+    <color name="text_primary">#F2F6FA</color>
+    <color name="text_secondary">#A8B4C4</color>
+    <color name="text_muted">#6B7A8F</color>
+    <color name="chip_ok_bg">#1A3D32</color>
+    <color name="chip_ok_text">#6FE8B5</color>
+    <color name="chip_warn_bg">#3D2A14</color>
+    <color name="chip_warn_text">#FFB86A</color>
+    <color name="step_icon_bg">#1E2D40</color>
+</resources>
