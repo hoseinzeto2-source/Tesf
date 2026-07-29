@@ -259,7 +259,7 @@ static void patchImpSlot(void* method, void* imp, const char* name) {
         return;
     }
 
-    // Cocotron: IMP at method+0x10 (inline struct) or method is pointer to struct with imp at +16
+    // Cocotron: IMP at method+0x10
     void* imp_slot = reinterpret_cast<uint8_t*>(method) + 0x10;
     if (isWritable(imp_slot, sizeof(void*))) {
         safeWrite(imp_slot, &wrapped, sizeof(void*));
@@ -267,17 +267,49 @@ static void patchImpSlot(void* method, void* imp, const char* name) {
     }
 }
 
-static void wrapSingleMethod(void* method, bool count_only = false) {
-    if (!method || !method_getName_fn || !sel_getName_fn) return;
+static bool readCString(const void* ptr, char* out, size_t cap) {
+    if (!ptr || !out || cap == 0) return false;
+    for (size_t i = 0; i < cap - 1; i++) {
+        char c = 0;
+        if (!safeRead(reinterpret_cast<const uint8_t*>(ptr) + i, &c, 1)) return false;
+        out[i] = c;
+        if (c == '\0') return i > 0;
+    }
+    out[cap - 1] = '\0';
+    return false;
+}
 
+static bool methodName(void* method, char* out, size_t cap) {
+    if (!method || !out || cap == 0) return false;
+    out[0] = '\0';
+
+    // Cocotron: method+0 holds selector name C-string (method_getName feeds it to sel_getUid).
+    void* p = nullptr;
+    if (safeRead(method, &p, sizeof(p)) && p && readCString(p, out, cap)) {
+        if (out[0] >= 'A' && out[0] <= 'z') return true;
+    }
+
+    // Fallback via runtime APIs
+    if (!method_getName_fn || !sel_getName_fn) return false;
     void* sel = method_getName_fn(method);
-    const char* name = sel_getName_fn(sel);
-    if (!isWatchSelector(name)) return;
+    if (!sel) return false;
+    const char* n = sel_getName_fn(sel);
+    if (!n || !n[0]) return false;
+    strncpy(out, n, cap - 1);
+    out[cap - 1] = '\0';
+    return true;
+}
+
+static void wrapSingleMethod(void* method, bool count_only = false) {
+    if (!method) return;
+
+    char name_buf[128] = {};
+    if (!methodName(method, name_buf, sizeof(name_buf))) return;
+    if (!isWatchSelector(name_buf)) return;
 
     g_watch_methods_found++;
 
     if (count_only) return;
-
     if (!real_method_getImplementation) return;
 
     std::lock_guard<std::recursive_mutex> lock(g_wrap_mutex);
@@ -289,7 +321,7 @@ static void wrapSingleMethod(void* method, bool count_only = false) {
         return;
     }
 
-    patchImpSlot(method, imp, name);
+    patchImpSlot(method, imp, name_buf);
     g_wrapped_methods.insert(method);
 }
 
@@ -310,18 +342,22 @@ static void wrapMethodListInline(const uint8_t* list, int count) {
         const uint8_t* ent = list + i * kStride;
         if (!isReadable(ent, kStride)) continue;
 
-        void* sel = nullptr;
+        char name_buf[128] = {};
+        // Inline layout: +0 name/sel pointer, +16 IMP
+        void* name_ptr = nullptr;
         void* imp = nullptr;
-        if (!safeRead(ent, &sel, sizeof(void*))) continue;
+        if (!safeRead(ent, &name_ptr, sizeof(void*))) continue;
         if (!safeRead(ent + 16, &imp, sizeof(void*))) continue;
-        if (!sel || !sel_getName_fn || !imp) continue;
-
-        const char* name = sel_getName_fn(sel);
-        if (!isWatchSelector(name)) continue;
+        if (!name_ptr || !imp) continue;
+        if (!readCString(name_ptr, name_buf, sizeof(name_buf))) {
+            if (sel_getName_fn) {
+                const char* n = sel_getName_fn(name_ptr);
+                if (n) strncpy(name_buf, n, sizeof(name_buf) - 1);
+            }
+        }
+        if (!isWatchSelector(name_buf)) continue;
 
         g_watch_methods_found++;
-
-        if (!real_method_getImplementation) continue;
 
         std::lock_guard<std::recursive_mutex> lock(g_wrap_mutex);
         void* method = const_cast<uint8_t*>(ent);
@@ -330,8 +366,32 @@ static void wrapMethodListInline(const uint8_t* list, int count) {
             g_wrapped_methods.insert(method);
             continue;
         }
-        patchImpSlot(method, imp, name);
+        patchImpSlot(method, imp, name_buf);
         g_wrapped_methods.insert(method);
+    }
+}
+
+static void dumpClassMethodSample(void* cls, const char* cls_name) {
+    if (!cls || !cls_name) return;
+    void* class_d = nullptr;
+    if (!safeRead(reinterpret_cast<uint8_t*>(cls) + 0x18, &class_d, sizeof(void*)) || !class_d) {
+        LOGI("dump %s: no class_d", cls_name);
+        return;
+    }
+    uint16_t inst_count = 0, meta_count = 0;
+    safeRead(reinterpret_cast<uint8_t*>(class_d) + 0x10, &inst_count, sizeof(uint16_t));
+    safeRead(reinterpret_cast<uint8_t*>(class_d) + 0x12, &meta_count, sizeof(uint16_t));
+    LOGI("dump %s: class_d=%p inst=%u meta=%u", cls_name, class_d, inst_count, meta_count);
+
+    const auto* list = reinterpret_cast<const uint8_t*>(class_d) + 0x18;
+    int logged = 0;
+    for (int i = 0; i < inst_count && i < 200 && logged < 25; i++) {
+        void* method = nullptr;
+        if (!safeRead(list + i * 8, &method, sizeof(void*)) || !method) continue;
+        char name_buf[128] = {};
+        if (!methodName(method, name_buf, sizeof(name_buf))) continue;
+        LOGI("dump %s[%d]: %s", cls_name, i, name_buf);
+        logged++;
     }
 }
 
@@ -351,7 +411,6 @@ static void wrapWatchMethodsInClass(void* cls) {
     wrapMethodListPtr(inst_list, inst_count);
     wrapMethodListPtr(inst_list + inst_count * 8, meta_count);
 
-  // Also try inline objc_method array (sel/types/imp stride 24)
     wrapMethodListInline(inst_list, inst_count);
     wrapMethodListInline(inst_list + inst_count * 24, meta_count);
 }
@@ -359,18 +418,6 @@ static void wrapWatchMethodsInClass(void* cls) {
 static void hook_objc_execClass(void* cls) {
     if (real_objc_execClass) real_objc_execClass(cls);
     wrapWatchMethodsInClass(cls);
-}
-
-static bool readCString(const void* ptr, char* out, size_t cap) {
-    if (!ptr || !out || cap == 0) return false;
-    for (size_t i = 0; i < cap - 1; i++) {
-        char c = 0;
-        if (!safeRead(reinterpret_cast<const uint8_t*>(ptr) + i, &c, 1)) return false;
-        out[i] = c;
-        if (c == '\0') return i > 0;
-    }
-    out[cap - 1] = '\0';
-    return false;
 }
 
 static void scanAllRegisteredClasses() {
@@ -431,6 +478,7 @@ static void scanAllRegisteredClasses() {
         void* cls = lookup_class_fn(kPriority[i]);
         if (cls) {
             LOGI("scan: priority class %s = %p", kPriority[i], cls);
+            dumpClassMethodSample(cls, kPriority[i]);
             wrapWatchMethodsInClass(cls);
         } else {
             LOGI("scan: priority class %s MISS", kPriority[i]);
@@ -524,7 +572,7 @@ void pollGameHooks() {
         refreshReadableMaps();
         if (installLibgameHooks()) g_hooks_installed = true;
     }
-    if (g_hooks_installed && g_slot_count == 0 && (g_poll_ticks % 180 == 0)) {
+    if (g_hooks_installed && g_slot_count == 0 && (g_poll_ticks % 600 == 0)) {
         scanAllRegisteredClasses();
     }
 }
