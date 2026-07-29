@@ -36,10 +36,11 @@ static const char* kGameLib = "libgame-SSM-GooglePlay-Gold-Release-Module-1013.s
 static constexpr int kMaxImpHooks = 24;
 
 // Cocotron objc offsets (build 1013, from RE)
+// lookup_class: adrp 0x2994000; ldr [x20, #0x70] → global class table ptr
 static constexpr uintptr_t kOffLookupClass = 0x1d7bfdc;
 static constexpr uintptr_t kOffClassNameEntry = 0x1d7bef0;
 static constexpr uintptr_t kOffObjcExecClass = 0x1d7d3e4;
-static constexpr uintptr_t kOffGlobalClassTable = 0x2994098;
+static constexpr uintptr_t kOffGlobalClassTable = 0x2994070;
 
 using MethodGetNameFn = void* (*)(void* method);
 using SelGetNameFn = const char* (*)(void* sel);
@@ -381,48 +382,59 @@ static void scanAllRegisteredClasses() {
     void* table_meta = nullptr;
     void** global = reinterpret_cast<void**>(base + kOffGlobalClassTable);
     if (!safeRead(global, &table_meta, sizeof(void*)) || !table_meta) {
-        LOGE("scan: class table missing");
-        return;
+        LOGE("scan: class table missing at +0x%lx — trying priority lookup anyway",
+             (unsigned long)kOffGlobalClassTable);
     }
 
     int32_t count = 0;
-    if (!safeRead(reinterpret_cast<uint8_t*>(table_meta) + 0x10, &count, sizeof(int32_t))) return;
-    count &= 0x7fffffff;
+    if (table_meta) {
+        if (!safeRead(reinterpret_cast<uint8_t*>(table_meta) + 0x10, &count, sizeof(int32_t))) {
+            LOGE("scan: cannot read class count");
+        } else {
+            count &= 0x7fffffff;
+        }
+    }
     if (count <= 0 || count > 20000) {
-        LOGE("scan: bad class count %d", count);
-        return;
+        LOGE("scan: bad class count %d (table=%p) — falling back to priority classes", count,
+             table_meta);
+    } else {
+        int wrapped_before = g_slot_count;
+        int classes = 0;
+        g_watch_methods_found = 0;
+
+        for (int i = 0; i < count; i++) {
+            void* name_entry = class_name_entry_fn(table_meta, static_cast<uintptr_t>(i));
+            if (!name_entry) continue;
+
+            void* name_ptr = nullptr;
+            if (!safeRead(name_entry, &name_ptr, sizeof(void*)) || !name_ptr) continue;
+
+            char name[96] = {};
+            if (!readCString(name_ptr, name, sizeof(name))) continue;
+
+            void* cls = lookup_class_fn(name);
+            if (!cls) continue;
+
+            classes++;
+            wrapWatchMethodsInClass(cls);
+        }
+
+        g_classes_scanned = classes;
+        LOGI("scan: %d classes, hooks %d -> %d", classes, wrapped_before, g_slot_count);
     }
-
-    int wrapped_before = g_slot_count;
-    int classes = 0;
-    g_watch_methods_found = 0;
-
-    for (int i = 0; i < count; i++) {
-        void* name_entry = class_name_entry_fn(table_meta, static_cast<uintptr_t>(i));
-        if (!name_entry) continue;
-
-        void* name_ptr = nullptr;
-        if (!safeRead(name_entry, &name_ptr, sizeof(void*)) || !name_ptr) continue;
-
-        char name[96] = {};
-        if (!readCString(name_ptr, name, sizeof(name))) continue;
-
-        void* cls = lookup_class_fn(name);
-        if (!cls) continue;
-
-        classes++;
-        wrapWatchMethodsInClass(cls);
-    }
-
-    g_classes_scanned = classes;
-    LOGI("scan: %d classes, hooks %d -> %d", classes, wrapped_before, g_slot_count);
 
     static const char* kPriority[] = {
-        "MenuManager", "GameplayManager", "MainManager", "StateManager", nullptr,
+        "MenuManager", "GameplayManager", "MainManager", "StateManager",
+        "NetworkManager", "GameManager", "MatchManager", nullptr,
     };
     for (int i = 0; kPriority[i]; i++) {
         void* cls = lookup_class_fn(kPriority[i]);
-        if (cls) wrapWatchMethodsInClass(cls);
+        if (cls) {
+            LOGI("scan: priority class %s = %p", kPriority[i], cls);
+            wrapWatchMethodsInClass(cls);
+        } else {
+            LOGI("scan: priority class %s MISS", kPriority[i]);
+        }
     }
 }
 
