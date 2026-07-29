@@ -19,6 +19,8 @@ struct MatchSnapshot {
     int display_w = 0;
     int display_h = 0;
     int swap_frames = 0;
+    int update_tick = 0;
+    int scan_pass = 0;
     bool egl_hooked = false;
     bool live_scan_active = false;
     int frames_since_lib = 0;
@@ -36,7 +38,7 @@ struct MatchSnapshot {
 };
 
 bool isGameLibLoaded();
-GameExports readGameExports();
-std::vector<BodySample> scanBodiesLimited(int maxBodies, size_t maxBytes);
-MatchSnapshot buildMatchSnapshot(int displayW, int displayH, bool eglHooked, int swapFrames,
-                                   int framesSinceLib, bool allowBodyScan);
+void resetLiveScanState();
+GameExports readGameExportsCached();
+void applyRotatingBodyScan(MatchSnapshot& snap, size_t bytesPerPass);
+void applyRotatingScoreScan(MatchSnapshot& snap, size_t bytesPerPass);

@@ -19,7 +19,7 @@
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
 
-static const int kLibStableFrames = 240; // ~4s after libgame loads before heap scan
+static const int kLibStableFrames = 90; // ~1.5s after libgame loads before heap scan
 
 static EGLBoolean (*real_eglSwapBuffers)(EGLDisplay, EGLSurface) = nullptr;
 
@@ -50,8 +50,12 @@ static void applyMobileStyle(float scale) {
 }
 
 static void trackLibFrames() {
-    if (isGameLibLoaded()) frames_since_lib++;
-    else frames_since_lib = 0;
+    if (isGameLibLoaded()) {
+        frames_since_lib++;
+    } else {
+        if (frames_since_lib > 0) resetLiveScanState();
+        frames_since_lib = 0;
+    }
 }
 
 static void tryInitImGui(EGLDisplay dpy, EGLSurface surface) {
@@ -90,10 +94,24 @@ static void tryInitImGui(EGLDisplay dpy, EGLSurface surface) {
 
 static void refreshSnapshot(int w, int h) {
     const bool allowScan = frames_since_lib >= kLibStableFrames;
-    MatchSnapshot snap =
-        buildMatchSnapshot(w, h, egl_hooked, swap_frames, frames_since_lib, allowScan);
+
     std::lock_guard<std::mutex> lock(snap_mutex);
-    cached_snap = snap;
+    cached_snap.display_w = w;
+    cached_snap.display_h = h;
+    cached_snap.swap_frames = swap_frames;
+    cached_snap.frames_since_lib = frames_since_lib;
+    cached_snap.egl_hooked = egl_hooked;
+    cached_snap.update_tick++;
+
+    cached_snap.exports = readGameExportsCached();
+    cached_snap.live_scan_active = allowScan && cached_snap.exports.lib_loaded;
+
+    if (cached_snap.live_scan_active) {
+        applyRotatingBodyScan(cached_snap, 768 * 1024);
+        if (cached_snap.update_tick % 20 == 0) {
+            applyRotatingScoreScan(cached_snap, 256 * 1024);
+        }
+    }
 }
 
 static void updateDisplaySize(EGLDisplay dpy, EGLSurface surface) {
@@ -113,8 +131,7 @@ static void updateDisplaySize(EGLDisplay dpy, EGLSurface surface) {
     io.DeltaTime = dt;
 
     trackLibFrames();
-    if (swap_frames % 15 == 0 || frames_since_lib == 1 || frames_since_lib == kLibStableFrames)
-        refreshSnapshot(w, h);
+    refreshSnapshot(w, h);
 }
 
 static void drawResearchHud() {
@@ -137,6 +154,7 @@ static void drawResearchHud() {
     ImGui::Separator();
 
     ImGui::Text("Display: %d x %d", s.display_w, s.display_h);
+    ImGui::Text("Live tick: %d  |  frame: %d", s.update_tick, s.swap_frames);
     ImGui::Text("libgame: %s", s.exports.lib_loaded ? "loaded" : "not yet");
   if (!s.exports.lib_loaded) {
         ImGui::TextColored(ImVec4(1.f, 0.75f, 0.3f, 1.f), "Enter a match for live data");
@@ -145,7 +163,8 @@ static void drawResearchHud() {
                            "Live scan in ~%ds (match loading...)",
                            (kLibStableFrames - s.frames_since_lib + 59) / 60);
     } else {
-        ImGui::TextColored(ImVec4(0.4f, 1.f, 0.5f, 1.f), "LIVE scan active");
+        ImGui::TextColored(ImVec4(0.4f, 1.f, 0.5f, 1.f),
+                           "LIVE  (~60 Hz physics, rotating scan #%d)", s.scan_pass);
     }
 
     ImGui::Separator();
