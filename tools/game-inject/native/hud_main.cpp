@@ -24,25 +24,24 @@ static bool imgui_ready = false;
 static bool egl_hooked = false;
 static int swap_frames = 0;
 static HudStatus hud_status;
-static float ui_scale = 3.5f;
+static float ui_scale = 2.0f;
 static auto last_time = std::chrono::steady_clock::now();
 
 static float computeUiScale(int w, int h) {
     const float short_edge = (float)std::min(w, h);
-    // 320px short edge -> ~3.5x; 1080p phone -> ~4.5x; clamp for readability
-    const float scale = short_edge / 320.f;
-    return std::clamp(scale, 3.0f, 5.5f);
+    // Balanced mobile scale: readable on phone without covering half the screen
+    return std::clamp(short_edge / 480.f, 1.65f, 2.35f);
 }
 
 static void applyMobileStyle(float scale) {
     ImGuiStyle& style = ImGui::GetStyle();
-    style.WindowRounding = 12.f * scale;
-    style.FrameRounding = 8.f * scale;
-    style.WindowPadding = ImVec2(22.f * scale, 20.f * scale);
-    style.ItemSpacing = ImVec2(14.f * scale, 18.f * scale);
-    style.ItemInnerSpacing = ImVec2(10.f * scale, 8.f * scale);
-    style.ScrollbarSize = 28.f * scale;
-    style.Alpha = 0.92f;
+    style.WindowRounding = 8.f * scale;
+    style.FrameRounding = 5.f * scale;
+    style.WindowPadding = ImVec2(14.f * scale, 12.f * scale);
+    style.ItemSpacing = ImVec2(8.f * scale, 10.f * scale);
+    style.ItemInnerSpacing = ImVec2(6.f * scale, 5.f * scale);
+    style.ScrollbarSize = 18.f * scale;
+    style.Alpha = 0.90f;
     style.ScaleAllSizes(scale);
 }
 
@@ -63,9 +62,9 @@ static void tryInitImGui(EGLDisplay dpy, EGLSurface surface) {
     io.IniFilename = nullptr;
 
     ImFontConfig font_cfg;
-    font_cfg.SizePixels = std::clamp(26.f * ui_scale / 3.5f, 32.f, 72.f);
+    font_cfg.SizePixels = std::clamp(18.f * ui_scale, 22.f, 32.f);
     io.Fonts->AddFontDefault(&font_cfg);
-    io.FontGlobalScale = ui_scale / 3.5f;
+    io.FontGlobalScale = 1.0f;
 
     ImGui::StyleColorsDark();
     applyMobileStyle(ui_scale);
@@ -100,16 +99,13 @@ static void updateDisplaySize(EGLDisplay dpy, EGLSurface surface) {
 }
 
 static void drawResearchHud() {
-    const float w = ImGui::GetIO().DisplaySize.x;
-    const float h = ImGui::GetIO().DisplaySize.y;
-    const float pad = 12.f * ui_scale;
+    const float pad = 10.f;
 
     ImGui::SetNextWindowPos(ImVec2(pad, pad), ImGuiCond_Always);
-    ImGui::SetNextWindowSize(ImVec2(w - 2.f * pad, h * 0.58f), ImGuiCond_Always);
-    ImGui::SetNextWindowBgAlpha(0.90f);
+    ImGui::SetNextWindowBgAlpha(0.88f);
 
     const ImGuiWindowFlags flags =
-        ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove;
+        ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove;
 
     ImGui::Begin("SSM HUD", nullptr, flags);
 
@@ -139,14 +135,7 @@ static void drawResearchHud() {
         "Ball, score, and physics values are not read from the process.");
     ImGui::Spacing();
     ImGui::TextWrapped(
-        "Overlay only draws on top of the game. No shot injection or network changes.");
-
-    ImGui::Spacing();
-    ImGui::Separator();
-    ImGui::Spacing();
-
-    ImGui::TextUnformatted("Tap Play 1v1 to test match load.");
-    ImGui::Text("UI scale: %.1f", ui_scale);
+        "Overlay only — no memory scan, no shot injection.");
 
     ImGui::End();
 }
