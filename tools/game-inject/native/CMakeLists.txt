@@ -9,6 +9,8 @@ set(NATIVE_DIR ${CMAKE_CURRENT_SOURCE_DIR})
 add_library(ssm_research_hud SHARED
     hud_main.cpp
     telemetry.cpp
+    memory_safe.cpp
+    game_hooks.cpp
     ${IMGUI_DIR}/imgui.cpp
     ${IMGUI_DIR}/imgui_draw.cpp
     ${IMGUI_DIR}/imgui_tables.cpp

@@ -12,7 +12,8 @@ struct GameExports {
 enum class DataSource : uint8_t {
     None = 0,
     PhysicsExports = 1,
-    ProtobufShotOutcome = 2,
+    HookShotOutcome = 2,
+    HookGameStarted = 3,
 };
 
 struct MatchSnapshot {
@@ -20,9 +21,9 @@ struct MatchSnapshot {
     int display_h = 0;
     int swap_frames = 0;
     int update_tick = 0;
-    int scan_pass = 0;
+    int hook_events = 0;
     bool egl_hooked = false;
-    bool live_scan_active = false;
+    bool hooks_installed = false;
     int frames_since_lib = 0;
     DataSource data_source = DataSource::None;
 
@@ -31,8 +32,6 @@ struct MatchSnapshot {
     int puck_estimate = 0;
     float ball_x = 0.f;
     float ball_y = 0.f;
-    float ball_vx = 0.f;
-    float ball_vy = 0.f;
     bool ball_valid = false;
     float score_home = -1.f;
     float score_away = -1.f;
@@ -41,4 +40,7 @@ struct MatchSnapshot {
 bool isGameLibLoaded();
 void resetLiveScanState();
 GameExports readGameExportsCached();
-void applyProtobufMatchScan(MatchSnapshot& snap, size_t bytesPerPass);
+bool parseShotOutcomeObject(const void* obj, MatchSnapshot& out);
+bool parseGameStartedObject(const void* obj, MatchSnapshot& out);
+void commitHookSnapshot(const MatchSnapshot& snap);
+void mergeHookSnapshot(MatchSnapshot& dst);

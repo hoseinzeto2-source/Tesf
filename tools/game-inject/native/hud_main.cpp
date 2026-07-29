@@ -1,4 +1,5 @@
 #include "telemetry.h"
+#include "game_hooks.h"
 
 #include <algorithm>
 #include <chrono>
@@ -18,8 +19,6 @@
 #define LOG_TAG "SSMResearchHUD"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
-
-static const int kLibStableFrames = 90; // ~1.5s after libgame loads before heap scan
 
 static EGLBoolean (*real_eglSwapBuffers)(EGLDisplay, EGLSurface) = nullptr;
 
@@ -52,6 +51,7 @@ static void applyMobileStyle(float scale) {
 static void trackLibFrames() {
     if (isGameLibLoaded()) {
         frames_since_lib++;
+        pollGameHooks();
     } else {
         if (frames_since_lib > 0) resetLiveScanState();
         frames_since_lib = 0;
@@ -89,26 +89,20 @@ static void tryInitImGui(EGLDisplay dpy, EGLSurface surface) {
     }
 
     imgui_ready = true;
-    LOGI("ImGui ready GLES3 scale=%.2f font=%.0f display=%dx%d", ui_scale, font_cfg.SizePixels, w, h);
+    LOGI("ImGui ready scale=%.2f %dx%d", ui_scale, w, h);
 }
 
 static void refreshSnapshot(int w, int h) {
-    const bool allowScan = frames_since_lib >= kLibStableFrames;
-
     std::lock_guard<std::mutex> lock(snap_mutex);
     cached_snap.display_w = w;
     cached_snap.display_h = h;
     cached_snap.swap_frames = swap_frames;
     cached_snap.frames_since_lib = frames_since_lib;
     cached_snap.egl_hooked = egl_hooked;
+    cached_snap.hooks_installed = gameHooksInstalled();
     cached_snap.update_tick++;
-
     cached_snap.exports = readGameExportsCached();
-    cached_snap.live_scan_active = allowScan && cached_snap.exports.lib_loaded;
-
-    if (cached_snap.live_scan_active) {
-        applyProtobufMatchScan(cached_snap, 1024 * 1024);
-    }
+    mergeHookSnapshot(cached_snap);
 }
 
 static void updateDisplaySize(EGLDisplay dpy, EGLSurface surface) {
@@ -133,14 +127,11 @@ static void updateDisplaySize(EGLDisplay dpy, EGLSurface surface) {
 
 static void drawResearchHud() {
     const float pad = 10.f;
-
     ImGui::SetNextWindowPos(ImVec2(pad, pad), ImGuiCond_Always);
     ImGui::SetNextWindowBgAlpha(0.88f);
 
-    const ImGuiWindowFlags flags =
-        ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove;
-
-    ImGui::Begin("SSM HUD", nullptr, flags);
+    ImGui::Begin("SSM HUD", nullptr,
+                 ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove);
 
     std::lock_guard<std::mutex> lock(snap_mutex);
     const MatchSnapshot& s = cached_snap;
@@ -150,66 +141,54 @@ static void drawResearchHud() {
     ImGui::PopStyleColor();
     ImGui::Separator();
 
-    ImGui::Text("Display: %d x %d", s.display_w, s.display_h);
-    ImGui::Text("Live tick: %d  |  frame: %d", s.update_tick, s.swap_frames);
-    ImGui::Text("libgame: %s", s.exports.lib_loaded ? "loaded" : "not yet");
-  if (!s.exports.lib_loaded) {
-        ImGui::TextColored(ImVec4(1.f, 0.75f, 0.3f, 1.f), "Enter a match for live data");
-    } else if (!s.live_scan_active) {
-        ImGui::TextColored(ImVec4(1.f, 0.75f, 0.3f, 1.f),
-                           "Live scan in ~%ds (match loading...)",
-                           (kLibStableFrames - s.frames_since_lib + 59) / 60);
-    } else {
-        ImGui::TextColored(ImVec4(0.4f, 1.f, 0.5f, 1.f),
-                           "LIVE protobuf scan #%d", s.scan_pass);
-    }
+    ImGui::Text("tick: %d  frame: %d", s.update_tick, s.swap_frames);
+    ImGui::Text("libgame: %s", s.exports.lib_loaded ? "loaded" : "waiting");
+    ImGui::Text("objc hooks: %s", s.hooks_installed ? "active" : "installing...");
+    ImGui::Text("hook events: %d", s.hook_events);
 
     ImGui::Separator();
-    ImGui::TextUnformatted("MATCH (shot_outcome / field_state)");
-    if (s.data_source == DataSource::ProtobufShotOutcome) {
-        ImGui::TextColored(ImVec4(0.5f, 1.f, 0.6f, 1.f), "Source: protobuf struct");
-    } else if (s.live_scan_active) {
-        ImGui::TextColored(ImVec4(1.f, 0.75f, 0.3f, 1.f), "Source: searching...");
+    ImGui::TextUnformatted("MATCH (hooked shot_outcome / game_started)");
+
+    if (s.data_source == DataSource::HookShotOutcome) {
+        ImGui::TextColored(ImVec4(0.4f, 1.f, 0.55f, 1.f), "Source: setShotOutcome hook");
+    } else if (s.data_source == DataSource::HookGameStarted) {
+        ImGui::TextColored(ImVec4(0.4f, 1.f, 0.55f, 1.f), "Source: game_started hook");
+    } else if (s.exports.lib_loaded) {
+        ImGui::TextColored(ImVec4(1.f, 0.75f, 0.35f, 1.f), "Waiting for server event...");
     } else {
-        ImGui::TextColored(ImVec4(1.f, 0.6f, 0.4f, 1.f), "Source: not found yet");
+        ImGui::TextColored(ImVec4(1.f, 0.6f, 0.4f, 1.f), "Enter a match");
     }
 
     if (s.score_home >= 0.f && s.score_away >= 0.f)
         ImGui::Text("Score: %d : %d", (int)s.score_home, (int)s.score_away);
     else
-        ImGui::Text("Score: — (see top game HUD)");
+        ImGui::Text("Score: — (updates on shot_outcome)");
 
-    if (s.ball_valid) {
+    if (s.ball_valid)
         ImGui::Text("Ball X: %.4f  Y: %.4f", s.ball_x, s.ball_y);
-    } else if (s.live_scan_active) {
-        ImGui::TextColored(ImVec4(1.f, 0.5f, 0.4f, 1.f), "Ball: scanning protobuf...");
-    } else {
-        ImGui::Text("Ball: waiting for match");
-    }
+    else
+        ImGui::Text("Ball: — (from field_state on event)");
 
-    if (s.data_source == DataSource::ProtobufShotOutcome) {
-        ImGui::Text("Pucks in field_state: %d", s.puck_estimate);
-        ImGui::Text("Bodies in snapshot: %d", s.body_count);
+    if (s.body_count > 0) {
+        ImGui::Text("field_state bodies: %d", s.body_count);
+        ImGui::Text("pucks (excl. ball): %d", s.puck_estimate);
     }
 
     ImGui::Separator();
     ImGui::TextUnformatted("PHYSICS");
     if (s.exports.lib_loaded) {
         ImGui::Text("sInternalVelocity: %.4f", s.exports.internal_velocity);
-        ImGui::Text("physics_debug: %d  diag: %d", s.exports.physics_debug, s.exports.physics_diag);
-    } else {
-        ImGui::Text("Physics exports: N/A");
+        ImGui::Text("debug: %d  diag: %d", s.exports.physics_debug, s.exports.physics_diag);
     }
+
     ImGui::Separator();
-    ImGui::TextWrapped(
-        "Velocity Vx/Vy needs Frida hook — not shown. Online result is server shot_outcome.");
+    ImGui::TextWrapped("No heap scan — data from libgame objc hooks only.");
 
     ImGui::End();
 }
 
 static void renderImGuiFrame(EGLDisplay dpy, EGLSurface surface) {
     if (dpy == EGL_NO_DISPLAY || surface == EGL_NO_SURFACE) return;
-
     tryInitImGui(dpy, surface);
     if (!imgui_ready) return;
 
@@ -231,34 +210,19 @@ static EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface) {
 
 static void installEglHook() {
     if (egl_hooked) return;
-
     void* egl = dlopen("libEGL.so", RTLD_NOW);
-    if (!egl) {
-        LOGE("dlopen libEGL failed");
-        return;
-    }
-
+    if (!egl) return;
     void* sym = dlsym(egl, "eglSwapBuffers");
-    if (!sym) {
-        LOGE("eglSwapBuffers missing");
-        return;
-    }
-
+    if (!sym) return;
     A64HookFunction(sym, (void*)hook_eglSwapBuffers, (void**)&real_eglSwapBuffers);
     egl_hooked = true;
-    LOGI("eglSwapBuffers hooked");
-
-    void* sym2 = dlsym(egl, "eglSwapBuffersWithDamageKHR");
-    if (sym2 && !real_eglSwapBuffers) {
-        A64HookFunction(sym2, (void*)hook_eglSwapBuffers, (void**)&real_eglSwapBuffers);
-        LOGI("eglSwapBuffersWithDamageKHR hooked");
-    }
 }
 
 extern "C" JNIEXPORT jint JNI_OnLoad(JavaVM* vm, void* reserved) {
     (void)vm;
     (void)reserved;
-    LOGI("ssm_research_hud loaded (egl HUD + deferred live read)");
+    LOGI("ssm_research_hud: egl + libgame objc hooks");
     installEglHook();
+    installGameHooks();
     return JNI_VERSION_1_6;
 }
