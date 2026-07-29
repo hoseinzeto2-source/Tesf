@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">SSM Research Bridge</string>
+    <string name="title">پل تحقیقاتی Soccer Stars</string>
+    <string name="subtitle">اتصال امن به VPS برای ADB / تحلیل HUD — فقط تحقیق آموزشی</string>
+    <string name="connect">اتصال به سرور</string>
+    <string name="disconnect">قطع اتصال</string>
+    <string name="open_game">باز کردن Soccer Stars</string>
+    <string name="enable_adb">فعال‌سازی ADB TCP (روت)</string>
+    <string name="status_idle">وضعیت: قطع</string>
+    <string name="notif_channel">Research Bridge</string>
+    <string name="notif_title">SSM Bridge متصل</string>
+    <string name="notif_text">تونل ADB روی VPS فعال است</string>
+</resources>

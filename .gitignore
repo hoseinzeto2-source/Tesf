@@ -1,0 +1,21 @@
+game-analysis/so.apks
+game-analysis/extracted/
+game-analysis/base/
+game-analysis/native/
+downloads/
+dumped/
+tools/physics-dump/dumped/
+!tools/physics-dump/dumped/lib_analysis.json
+!tools/physics-dump/dumped/assets_dump.json
+!tools/physics-dump/dumped/symbols.txt
+*.so
+
+# Research bridge secrets
+tools/research-bridge/config.env
+tools/research-bridge/keys/agent_ed25519
+tools/research-companion/app_ssh_key
+tools/research-companion/app_ssh_key_rsa
+tools/research-companion/app/src/main/assets/id_rsa
+tools/research-companion/.gradle/
+tools/research-companion/**/build/
+tools/research-companion/local.properties

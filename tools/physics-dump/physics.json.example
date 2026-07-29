@@ -1,0 +1,11 @@
+{
+  "maxShotPower": 140.0,
+  "maxShotSpeed": 28.0,
+  "puckMass": 2.0,
+  "ballMass": 1.0,
+  "friction": 0.985,
+  "restitution": 0.92,
+  "edgeRestitution": 0.92,
+  "powerScale": 1.0,
+  "notes": "Copy to /sdcard/SoccerStarsAssist/physics.json after Frida calibration"
+}

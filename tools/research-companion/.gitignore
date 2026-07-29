@@ -1,0 +1,8 @@
+app_ssh_key
+app_ssh_key_rsa
+app/src/main/assets/id_rsa
+.gradle/
+**/build/
+local.properties
+*.apk
+*.aab
