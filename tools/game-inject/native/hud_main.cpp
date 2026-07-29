@@ -143,6 +143,7 @@ static void drawResearchHud() {
     ImGui::Text("libgame: %s", s.exports.lib_loaded ? "loaded" : "waiting");
     ImGui::Text("objc runtime: %s", s.hooks_installed ? "intercept ON" : "installing...");
     ImGui::Text("IMP hooks: %d  |  events: %d", s.hooks_patched, s.hook_events);
+    ImGui::Text("classes scanned: %d", gameClassesScanned());
     if (s.last_hook_sel[0]) ImGui::Text("last: %s", s.last_hook_sel);
 
     ImGui::Separator();
