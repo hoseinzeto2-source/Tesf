@@ -193,6 +193,14 @@ class AssistController(
             redPuckCount = detection.redPuckCount,
             analysisNotes = detection.analysisNotes,
             mapFamily = detection.mapFamily,
+            telemetry = buildTelemetry(
+                detection = detection,
+                bounds = bounds,
+                scale = scale,
+                aimActive = true,
+                goalPredicted = result.goalScored,
+                powerPercent = powerPercent,
+            ),
         )
     }
 
@@ -213,7 +221,86 @@ class AssistController(
         redPuckCount = detection.redPuckCount,
         analysisNotes = detection.analysisNotes,
         mapFamily = detection.mapFamily,
+        telemetry = buildTelemetry(
+            detection = detection,
+            bounds = detection.bounds,
+            scale = scale,
+            aimActive = detection.aim.active,
+            goalPredicted = false,
+            powerPercent = ((detection.aim.power / physicsConfig.maxShotPower) * 100).toInt().coerceIn(0, 100),
+        ),
     )
+
+    private fun buildTelemetry(
+        detection: FrameDetection,
+        bounds: FieldBounds?,
+        scale: Float,
+        aimActive: Boolean,
+        goalPredicted: Boolean,
+        powerPercent: Int,
+    ): MatchTelemetry {
+        val inMatch = detection.scene == ScenePhase.IN_MATCH ||
+            detection.pucks.size >= 4 ||
+            (detection.pucks.size >= 2 && detection.ball != null) ||
+            detection.isPostShot
+
+        val motionById = detection.postShotMotions.associateBy { it.puckId }
+
+        val puckTelemetry = detection.pucks.map { puck ->
+            val team = puck.kind.removePrefix("puck_")
+            val motion = motionById[puck.id]
+            val trail = motion?.trailLength?.toFloat()
+            val squash = trail?.let { len ->
+                ((len / puck.radius.toFloat()) * 35f).coerceIn(0f, 100f)
+            }
+            PuckTelemetry(
+                id = puck.id,
+                team = team,
+                xNorm = normCoord(puck.x, bounds, isX = true),
+                yNorm = normCoord(puck.y, bounds, isX = false),
+                xPx = (puck.x * scale).toFloat(),
+                yPx = (puck.y * scale).toFloat(),
+                speed = motion?.speed?.toFloat(),
+                trailLength = trail,
+                squashEstimate = squash,
+            )
+        }
+
+        val ball = detection.ball
+        return MatchTelemetry(
+            inMatch = inMatch,
+            aimActive = aimActive,
+            postShot = detection.isPostShot,
+            ballXNorm = ball?.let { normCoord(it.x, bounds, isX = true) },
+            ballYNorm = ball?.let { normCoord(it.y, bounds, isX = false) },
+            ballXPx = ball?.let { (it.x * scale).toFloat() },
+            ballYPx = ball?.let { (it.y * scale).toFloat() },
+            pucks = puckTelemetry,
+            blueCount = detection.bluePuckCount,
+            redCount = detection.redPuckCount,
+            goalPredicted = goalPredicted,
+            powerPercent = powerPercent,
+            confidence = detection.confidence,
+            mapFamily = detection.mapFamily,
+            notes = buildList {
+                if (detection.isPostShot) {
+                    val fastest = detection.postShotMotions.maxByOrNull { it.speed }
+                    if (fastest != null) {
+                        add("سریع‌ترین: ${fastest.team} v=${fastest.speed.toInt()}")
+                    }
+                }
+                addAll(detection.analysisNotes.take(2))
+            },
+        )
+    }
+
+    private fun normCoord(value: Double, bounds: FieldBounds?, isX: Boolean): Float {
+        if (bounds == null) return 0f
+        val span = if (isX) bounds.right - bounds.left else bounds.bottom - bounds.top
+        if (span < 1e-3) return 0f
+        val norm = if (isX) (value - bounds.left) / span else (value - bounds.top) / span
+        return norm.toFloat().coerceIn(0f, 1f)
+    }
 
     private fun fieldRect(bounds: FieldBounds, scale: Float) = RectF(
         (bounds.left * scale).toFloat(),

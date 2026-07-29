@@ -26,4 +26,5 @@ data class OverlayState(
     val redPuckCount: Int = 0,
     val mapFamily: String? = null,
     val analysisNotes: List<String> = emptyList(),
+    val telemetry: MatchTelemetry = MatchTelemetry(),
 )

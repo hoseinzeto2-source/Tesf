@@ -139,11 +139,9 @@ class GuideOverlayView(context: Context) : View(context) {
     invalidate()
   }
 
-  override fun onDraw(canvas: Canvas) {
+    override fun onDraw(canvas: Canvas) {
     super.onDraw(canvas)
     if (visibility != VISIBLE) return
-
-    drawHudPanel(canvas)
 
     if (showDebug) {
       state.debugField?.let { canvas.drawRect(it, debugFieldPaint) }

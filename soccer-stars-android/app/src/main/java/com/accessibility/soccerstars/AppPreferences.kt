@@ -15,6 +15,7 @@ object AppPreferences {
     private const val KEY_ASSIST_ENABLED = "assist_enabled"
     private const val KEY_HUD_X = "hud_x"
     private const val KEY_HUD_Y = "hud_y"
+    private const val KEY_SHOW_IMGUI_HUD = "show_imgui_hud"
 
     fun prefs(context: Context): SharedPreferences =
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -39,6 +40,13 @@ object AppPreferences {
 
     fun assistEnabled(context: Context): Boolean =
         prefs(context).getBoolean(KEY_ASSIST_ENABLED, true)
+
+    fun showImGuiHud(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_SHOW_IMGUI_HUD, true)
+
+    fun setShowImGuiHud(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(KEY_SHOW_IMGUI_HUD, enabled).apply()
+    }
 
     fun hudPosition(context: Context): Pair<Int, Int> {
         val p = prefs(context)

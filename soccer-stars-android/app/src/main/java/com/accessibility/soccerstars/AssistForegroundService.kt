@@ -34,6 +34,7 @@ class AssistForegroundService : Service() {
     private var virtualDisplay: VirtualDisplay? = null
 
     private var overlayView: GuideOverlayView? = null
+    private var imguiHudView: ImGuiHudView? = null
     private var statusBadge: StatusBadgeView? = null
     private var overlayController: OverlayController? = null
     private var windowManager: WindowManager? = null
@@ -133,8 +134,10 @@ class AssistForegroundService : Service() {
         mediaProjection?.stop()
 
         overlayController?.destroy()
+        imguiHudView?.let { try { windowManager?.removeView(it) } catch (_: Exception) {} }
         statusBadge?.let { windowManager?.removeView(it) }
         overlayView = null
+        imguiHudView = null
         statusBadge = null
         overlayController = null
         super.onDestroy()
@@ -193,7 +196,33 @@ class AssistForegroundService : Service() {
         overlayController = OverlayController(wm, overlayView)
         overlayController?.hide()
 
+        setupImGuiHud(wm, layoutType)
+
         setupStatusBadge(wm, layoutType)
+    }
+
+    private fun setupImGuiHud(wm: WindowManager, layoutType: Int) {
+        if (!AppPreferences.showImGuiHud(this)) return
+
+        val (hudX, hudY) = AppPreferences.hudPosition(this)
+        imguiHudView = ImGuiHudView(this)
+
+        val hudParams = WindowManager.LayoutParams(
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            layoutType,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+            PixelFormat.TRANSLUCENT,
+        ).apply {
+            gravity = Gravity.TOP or Gravity.START
+            x = hudX
+            y = hudY
+        }
+
+        wm.addView(imguiHudView, hudParams)
+        imguiHudView?.visibility = android.view.View.GONE
     }
 
     private fun setupStatusBadge(wm: WindowManager, layoutType: Int) {
@@ -279,6 +308,16 @@ class AssistForegroundService : Service() {
             overlayController?.applyScene(state.scenePhase, showGameOverlay)
             if (showGameOverlay) {
                 overlayView?.updateState(state)
+                if (AppPreferences.showImGuiHud(this)) {
+                    imguiHudView?.visibility = android.view.View.VISIBLE
+                    imguiHudView?.update(state)
+                } else {
+                    imguiHudView?.visibility = android.view.View.GONE
+                    imguiHudView?.clear()
+                }
+            } else {
+                imguiHudView?.visibility = android.view.View.GONE
+                imguiHudView?.clear()
             }
             statusBadge?.statusText = state.statusText
             lastStatusLine = state.statusText
