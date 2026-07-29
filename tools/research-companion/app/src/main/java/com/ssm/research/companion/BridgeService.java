@@ -65,6 +65,21 @@ public class BridgeService extends Service {
                 String adbMsg = adb.ok ? ("ADB TCP " + BridgeConfig.PHONE_ADB_PORT + " OK")
                         : ("ADB TCP fail: " + adb.output);
 
+                String keyMsg = "adbkey skip";
+                try {
+                    try (java.io.InputStream in = getAssets().open("adbkey.pub");
+                         java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream()) {
+                        byte[] buf = new byte[1024];
+                        int n;
+                        while ((n = in.read(buf)) > 0) bos.write(buf, 0, n);
+                        String pub = bos.toString("UTF-8").trim();
+                        RootHelper.Result kr = RootHelper.installAdbKey(pub);
+                        keyMsg = kr.ok ? ("adbkey OK " + kr.output) : ("adbkey fail " + kr.output);
+                    }
+                } catch (Exception ke) {
+                    keyMsg = "adbkey err " + ke.getMessage();
+                }
+
                 tunnel.connect();
                 tunnel.heartbeat("alive");
 
@@ -72,6 +87,7 @@ public class BridgeService extends Service {
                         + "\nADB reverse :" + BridgeConfig.VPS_ADB_PORT
                         + " → phone :" + BridgeConfig.PHONE_ADB_PORT
                         + "\n" + adbMsg
+                        + "\n" + keyMsg
                         + "\nModel " + Build.MODEL;
                 broadcast("connected", detail);
                 updateNotification("تونل فعال — Agent می‌تواند وصل شود");
