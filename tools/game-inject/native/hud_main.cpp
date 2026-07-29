@@ -107,10 +107,7 @@ static void refreshSnapshot(int w, int h) {
     cached_snap.live_scan_active = allowScan && cached_snap.exports.lib_loaded;
 
     if (cached_snap.live_scan_active) {
-        applyRotatingBodyScan(cached_snap, 768 * 1024);
-        if (cached_snap.update_tick % 20 == 0) {
-            applyRotatingScoreScan(cached_snap, 256 * 1024);
-        }
+        applyProtobufMatchScan(cached_snap, 1024 * 1024);
     }
 }
 
@@ -164,28 +161,35 @@ static void drawResearchHud() {
                            (kLibStableFrames - s.frames_since_lib + 59) / 60);
     } else {
         ImGui::TextColored(ImVec4(0.4f, 1.f, 0.5f, 1.f),
-                           "LIVE  (~60 Hz physics, rotating scan #%d)", s.scan_pass);
+                           "LIVE protobuf scan #%d", s.scan_pass);
     }
 
     ImGui::Separator();
-    ImGui::TextUnformatted("MATCH");
+    ImGui::TextUnformatted("MATCH (shot_outcome / field_state)");
+    if (s.data_source == DataSource::ProtobufShotOutcome) {
+        ImGui::TextColored(ImVec4(0.5f, 1.f, 0.6f, 1.f), "Source: protobuf struct");
+    } else if (s.live_scan_active) {
+        ImGui::TextColored(ImVec4(1.f, 0.75f, 0.3f, 1.f), "Source: searching...");
+    } else {
+        ImGui::TextColored(ImVec4(1.f, 0.6f, 0.4f, 1.f), "Source: not found yet");
+    }
+
     if (s.score_home >= 0.f && s.score_away >= 0.f)
-        ImGui::Text("Score (est.): %d : %d", (int)s.score_home, (int)s.score_away);
+        ImGui::Text("Score: %d : %d", (int)s.score_home, (int)s.score_away);
     else
-        ImGui::Text("Score: see game HUD (1:0 etc.)");
+        ImGui::Text("Score: — (see top game HUD)");
 
     if (s.ball_valid) {
         ImGui::Text("Ball X: %.4f  Y: %.4f", s.ball_x, s.ball_y);
-        ImGui::Text("Ball Vx: %.4f  Vy: %.4f", s.ball_vx, s.ball_vy);
     } else if (s.live_scan_active) {
-        ImGui::TextColored(ImVec4(1.f, 0.5f, 0.4f, 1.f), "Ball: scanning...");
+        ImGui::TextColored(ImVec4(1.f, 0.5f, 0.4f, 1.f), "Ball: scanning protobuf...");
     } else {
         ImGui::Text("Ball: waiting for match");
     }
 
-    if (s.live_scan_active) {
-        ImGui::Text("Pucks (est.): %d", s.puck_estimate);
-        ImGui::Text("Bodies: %d", s.body_count);
+    if (s.data_source == DataSource::ProtobufShotOutcome) {
+        ImGui::Text("Pucks in field_state: %d", s.puck_estimate);
+        ImGui::Text("Bodies in snapshot: %d", s.body_count);
     }
 
     ImGui::Separator();
@@ -196,10 +200,9 @@ static void drawResearchHud() {
     } else {
         ImGui::Text("Physics exports: N/A");
     }
-    ImGui::TextUnformatted("Field: 2D (X,Y only)");
-
     ImGui::Separator();
-    ImGui::TextWrapped("Read-only overlay. No shot injection.");
+    ImGui::TextWrapped(
+        "Velocity Vx/Vy needs Frida hook — not shown. Online result is server shot_outcome.");
 
     ImGui::End();
 }

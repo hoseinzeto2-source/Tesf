@@ -1,18 +1,18 @@
 #pragma once
 
 #include <cstdint>
-#include <vector>
-
-struct BodySample {
-    float x, y, vx, vy, speed;
-    int label; // 0=puck, 1=ball estimate
-};
 
 struct GameExports {
     bool lib_loaded = false;
     float internal_velocity = 0.f;
     int physics_debug = 0;
     int physics_diag = 0;
+};
+
+enum class DataSource : uint8_t {
+    None = 0,
+    PhysicsExports = 1,
+    ProtobufShotOutcome = 2,
 };
 
 struct MatchSnapshot {
@@ -24,6 +24,7 @@ struct MatchSnapshot {
     bool egl_hooked = false;
     bool live_scan_active = false;
     int frames_since_lib = 0;
+    DataSource data_source = DataSource::None;
 
     GameExports exports;
     int body_count = 0;
@@ -40,5 +41,4 @@ struct MatchSnapshot {
 bool isGameLibLoaded();
 void resetLiveScanState();
 GameExports readGameExportsCached();
-void applyRotatingBodyScan(MatchSnapshot& snap, size_t bytesPerPass);
-void applyRotatingScoreScan(MatchSnapshot& snap, size_t bytesPerPass);
+void applyProtobufMatchScan(MatchSnapshot& snap, size_t bytesPerPass);
