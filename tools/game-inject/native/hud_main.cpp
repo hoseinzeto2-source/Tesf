@@ -97,6 +97,7 @@ static void tryInitImGui(EGLDisplay dpy, EGLSurface surface) {
     ImGuiIO& io = ImGui::GetIO();
     io.IniFilename = nullptr;
     io.ConfigFlags |= ImGuiConfigFlags_IsTouchScreen;
+    io.MouseDrawCursor = false;
 
     ImFontConfig font_cfg;
     font_cfg.SizePixels = std::clamp(18.f * ui_scale, 22.f, 32.f);
@@ -162,7 +163,8 @@ static void drawResearchHud() {
     ImGui::SetNextWindowPos(ImVec2(10.f, 10.f), ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowBgAlpha(hud_alpha);
 
-    ImGui::Begin("SSM HUD", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
+    ImGui::Begin("SSM HUD", nullptr,
+                 ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoCollapse);
 
     std::lock_guard<std::mutex> lock(snap_mutex);
     const MatchSnapshot& s = cached_snap;
@@ -269,6 +271,7 @@ static void renderImGuiFrame(EGLDisplay dpy, EGLSurface surface) {
     updateDisplaySize(dpy, surface);
 
     ImGui_ImplOpenGL3_NewFrame();
+    touchApplyPendingEvents();
     ImGui::NewFrame();
     drawResearchHud();
     ImGui::Render();
