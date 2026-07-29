@@ -13,3 +13,9 @@ tools/physics-dump/dumped/
 # Research bridge secrets
 tools/research-bridge/config.env
 tools/research-bridge/keys/agent_ed25519
+tools/research-companion/app_ssh_key
+tools/research-companion/app_ssh_key_rsa
+tools/research-companion/app/src/main/assets/id_rsa
+tools/research-companion/.gradle/
+tools/research-companion/**/build/
+tools/research-companion/local.properties
