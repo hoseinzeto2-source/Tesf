@@ -5,4 +5,7 @@ game-analysis/native/
 downloads/
 dumped/
 tools/physics-dump/dumped/
+!tools/physics-dump/dumped/lib_analysis.json
+!tools/physics-dump/dumped/assets_dump.json
+!tools/physics-dump/dumped/symbols.txt
 *.so

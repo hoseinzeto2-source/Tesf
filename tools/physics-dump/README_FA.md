@@ -46,6 +46,12 @@ frida -U com.miniclip.soccerstars -l frida/enable_physics_debug.js
 
 ## روش ۲ — Dump کتابخانه native
 
+### گزارش RE حرفه‌ای
+
+مستند کامل تحلیل lib (pipeline شلیک، protobuf، offsetها، Ghidra):
+
+→ [game-analysis/LIB_RE_REPORT.md](../../game-analysis/LIB_RE_REPORT.md)
+
 ### الف) از فایل `.apks` (بدون گوشی — پیشنهادی)
 
 فایل `so.apks` از لینک رسمی نسخه 36.14.4:
