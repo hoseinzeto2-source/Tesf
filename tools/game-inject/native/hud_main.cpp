@@ -176,7 +176,7 @@ static void drawResearchHud() {
     }
 
     ImGui::Separator();
-    ImGui::TextWrapped("Hooks: networkEventShotOutcome/GameStarted, setShotOutcome. req offsets +416/+608.");
+    ImGui::TextWrapped("If game shows 'waiting for server': check network/logcat. Hooks run AFTER game handler.");
 
     ImGui::End();
 }

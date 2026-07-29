@@ -47,6 +47,29 @@ adb install-multiple build/patched-output/work/base-patched.apk \
 |------|--------|
 | امتیاز آنلاین | از سرور `shot_outcome` — HUD فقط نمایش |
 | آنتی‌چیت | امضای Miniclip عوض شده — آنلاین ممکن است خطا بدهد |
+| «waiting for server» | معمولاً **شبکه/سرور** یا **احراز هویت** — نه کمبود lib در APK |
+
+## «Waiting for server» — علت و عیب‌یابی
+
+متن روی UI اغلب از `MenuWait` / stateهای `WAITING_GAME_START` یا `WAITING_SHOT_OUTCOME` است (منتظر `game_started` / `shot_outcome` از سرور).
+
+| علت | توضیح |
+|-----|--------|
+| شبکه / سرور Miniclip | اینترنت، VPN، فیلتر، تأخیر بالا |
+| APK امضای research | سرور ممکن است کلاینت غیررسمی را رد کند (`mWaitingServerAuthentication`) |
+| حریف / صف مچ | 1v1 آنلاین تا جواب سرور «waiting» می‌ماند |
+| Hook قبلی (رفع شد) | inline patch **قبل** handler بازی → رویداد شبکه پردازش نمی‌شد |
+
+**نسخه فعلی:** telemetry **بعد** از handler اصلی بازی اجرا می‌شود (runtime wrap، بدون inline patch روی IMP).
+
+```bash
+adb logcat -s SSMResearchHUD
+# باید ببینید: hook: objc runtime wrap
+# بعد از شروع مچ: sel_register: networkEventGameStarted:
+```
+
+اگر با **APK رسمی** (بدون HUD) مچ درست است و با پچ‌شده «waiting» می‌ماند → احتمال زیاد **امضا/سرور**. اگر هر دو waiting → **شبکه**.
+
 | کرش | ممکن است روی بعضی ROMها — برای آزمایش offline/local |
 | Z | فیزیک 2D — Z ندارد |
 

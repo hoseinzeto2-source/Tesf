@@ -12,8 +12,6 @@
 #include <cstring>
 #include <mutex>
 #include <unordered_set>
-#include <vector>
-#include <string>
 
 #define LOG_TAG "SSMResearchHUD"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
@@ -36,10 +34,10 @@ static SelGetNameFn sel_getName_fn = nullptr;
 static SelRegisterNameFn real_sel_registerName = nullptr;
 
 static bool g_hooks_installed = false;
-static std::mutex g_imp_mutex;
-static std::mutex g_queue_mutex;
-static std::unordered_set<void*> g_patched_imps;
-static std::vector<std::pair<void*, std::string>> g_pending_patches;
+static std::mutex g_wrap_mutex;
+static std::unordered_set<void*> g_wrapped_source_imps;
+static std::unordered_set<void*> g_wrapped_methods;
+static thread_local bool g_in_hook_dispatch = false;
 
 struct ImpSlot {
     ObjcImp3 real = nullptr;
@@ -86,15 +84,18 @@ static bool isValidArg(const void* p) {
 }
 
 static void dispatchHook(void* sel, void* arg) {
-    if (!sel_getName_fn) return;
+    if (!sel_getName_fn || g_in_hook_dispatch) return;
     const char* name = sel_getName_fn(sel);
-
     if (!arg || !isValidArg(arg)) return;
+
+    g_in_hook_dispatch = true;
 
     MatchSnapshot snap;
     bool ok = false;
 
-    if (isNetworkShotOutcome(name) || isNetworkGameStarted(name) || isAnimateShot(name)) {
+    if (isNetworkGameStarted(name)) {
+        ok = parseGameStartedObject(arg, snap) || parseNetworkRequest(arg, snap);
+    } else if (isNetworkShotOutcome(name) || isAnimateShot(name)) {
         ok = parseNetworkRequest(arg, snap);
     } else if (strcmp(name, "setShotOutcome:") == 0 || strcmp(name, "shotOutcomeUpdateProcess:") == 0) {
         ok = parseShotOutcomeObject(arg, snap);
@@ -107,16 +108,19 @@ static void dispatchHook(void* sel, void* arg) {
 
     if (ok) {
         commitHookSnapshot(snap, name);
-        LOGI("hook [%s] score=%.0f:%.0f ball=%d bodies=%d",
+        LOGI("telemetry [%s] score=%.0f:%.0f ball=%d bodies=%d",
              name ? name : "?",
              snap.score_home, snap.score_away,
              snap.ball_valid ? 1 : 0, snap.body_count);
     }
+
+    g_in_hook_dispatch = false;
 }
 
+// Game logic runs first; telemetry only after original handler returns.
 #define HOOK_SLOT_BODY(I) \
-    dispatchHook(sel, arg); \
-    if (g_slots[I].real) g_slots[I].real(self, sel, arg);
+    if (g_slots[I].real) g_slots[I].real(self, sel, arg); \
+    dispatchHook(sel, arg);
 
 static void hook_slot_0(void* self, void* sel, void* arg) { HOOK_SLOT_BODY(0) }
 static void hook_slot_1(void* self, void* sel, void* arg) { HOOK_SLOT_BODY(1) }
@@ -148,67 +152,88 @@ static bool isImpInOurLib(void* imp) {
     return strstr(info.dli_fname, "ssm_research_hud") != nullptr;
 }
 
-static void tryPatchImp(void* imp, const char* sel_name) {
-    if (!imp || isImpInOurLib(imp)) return;
+static bool isOurHookImp(void* imp) {
+    if (!imp) return false;
+    for (int i = 0; i < kMaxImpHooks; i++) {
+        if (hook_slot_ptrs[i] == imp) return true;
+    }
+    return false;
+}
 
-    std::lock_guard<std::mutex> lock(g_imp_mutex);
-    if (g_patched_imps.count(imp)) return;
+static void* wrapImpIfNeeded(void* imp, const char* sel_name) {
+    if (!imp || isImpInOurLib(imp) || isOurHookImp(imp)) return imp;
+
+    std::lock_guard<std::mutex> lock(g_wrap_mutex);
+    if (g_wrapped_source_imps.count(imp)) {
+        for (int i = 0; i < g_slot_count; i++) {
+            if ((void*)g_slots[i].real == imp) return hook_slot_ptrs[i];
+        }
+        return imp;
+    }
     if (g_slot_count >= kMaxImpHooks) {
-        LOGE("hook: max IMP slots reached");
-        return;
+        LOGE("hook: max wrap slots reached");
+        return imp;
     }
 
     const int slot = g_slot_count++;
-    void* trampoline = nullptr;
-    A64HookFunction(imp, hook_slot_ptrs[slot], &trampoline);
-    g_slots[slot].real = (ObjcImp3)trampoline;
-    g_patched_imps.insert(imp);
+    g_slots[slot].real = (ObjcImp3)imp;
+    g_wrapped_source_imps.insert(imp);
     telemetrySetHookPatchedCount(g_slot_count);
-    LOGI("hook: slot %d patched %s @ %p", slot, sel_name ? sel_name : "?", imp);
+    LOGI("hook: wrap slot %d %s", slot, sel_name ? sel_name : "?");
+    return hook_slot_ptrs[slot];
 }
 
-static void queuePatchImp(void* imp, const char* sel_name) {
-    if (!imp || isImpInOurLib(imp)) return;
-    std::lock_guard<std::mutex> lock(g_imp_mutex);
-    if (g_patched_imps.count(imp)) return;
-
-    std::lock_guard<std::mutex> qlock(g_queue_mutex);
-    g_pending_patches.emplace_back(imp, sel_name ? sel_name : "");
-}
-
-static void drainPendingPatches() {
-    std::vector<std::pair<void*, std::string>> batch;
-    {
-        std::lock_guard<std::mutex> lock(g_queue_mutex);
-        if (g_pending_patches.empty()) return;
-        batch.swap(g_pending_patches);
-    }
-    for (const auto& entry : batch) {
-        tryPatchImp(entry.first, entry.second.c_str());
-    }
-}
-
-static void maybeHookMethod(void* method) {
+static void retroWrapMethod(void* method) {
     if (!method || !method_getName_fn || !sel_getName_fn || !real_method_getImplementation) return;
 
     void* sel = method_getName_fn(method);
     const char* name = sel_getName_fn(sel);
     if (!isWatchSelector(name)) return;
 
-    void* imp = real_method_getImplementation(method);
-    queuePatchImp(imp, name);
+    void* wrapped_imp = nullptr;
+    bool need_set = false;
+    {
+        std::lock_guard<std::mutex> lock(g_wrap_mutex);
+        if (g_wrapped_methods.count(method)) return;
+
+        void* imp = real_method_getImplementation(method);
+        if (!imp || isOurHookImp(imp)) {
+            g_wrapped_methods.insert(method);
+            return;
+        }
+
+        wrapped_imp = wrapImpIfNeeded(imp, name);
+        if (wrapped_imp != imp) {
+            need_set = true;
+        } else {
+            g_wrapped_methods.insert(method);
+        }
+    }
+
+    if (need_set && real_method_setImplementation) {
+        real_method_setImplementation(method, wrapped_imp);
+        std::lock_guard<std::mutex> lock(g_wrap_mutex);
+        g_wrapped_methods.insert(method);
+        LOGI("hook: retro-wrapped %s", name);
+    }
 }
 
 static void* hook_method_setImplementation(void* method, void* imp) {
-    void* result = real_method_setImplementation(method, imp);
-    maybeHookMethod(method);
-    return result;
+    if (method && method_getName_fn && sel_getName_fn) {
+        void* sel = method_getName_fn(method);
+        const char* name = sel_getName_fn(sel);
+        if (isWatchSelector(name)) {
+            imp = wrapImpIfNeeded(imp, name);
+            std::lock_guard<std::mutex> lock(g_wrap_mutex);
+            g_wrapped_methods.insert(method);
+        }
+    }
+    return real_method_setImplementation(method, imp);
 }
 
 static void* hook_method_getImplementation(void* method) {
-    void* imp = real_method_getImplementation(method);
-    maybeHookMethod(method);
-    return imp;
+    retroWrapMethod(method);
+    return real_method_getImplementation(method);
 }
 
 static void* hook_sel_registerName(const char* name) {
@@ -240,7 +265,7 @@ static bool installLibgameHooks() {
     if (sel_reg) {
         A64HookFunction(sel_reg, (void*)hook_sel_registerName, (void**)&real_sel_registerName);
     }
-    LOGI("hook: objc runtime intercept active");
+    LOGI("hook: objc runtime wrap (post-call telemetry, no IMP inline patch)");
     return true;
 }
 
@@ -250,7 +275,7 @@ static void* hookPollThread(void*) {
             refreshReadableMaps();
             if (installLibgameHooks()) {
                 g_hooks_installed = true;
-                LOGI("hook: ready (deferred IMP patch on EGL thread)");
+                LOGI("hook: ready");
                 break;
             }
         }
@@ -271,7 +296,6 @@ void pollGameHooks() {
         refreshReadableMaps();
         if (installLibgameHooks()) g_hooks_installed = true;
     }
-    drainPendingPatches();
 }
 
 bool gameHooksInstalled() {
