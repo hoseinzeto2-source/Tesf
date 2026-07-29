@@ -1,0 +1,6 @@
+# Local secrets — never commit
+tools/research-bridge/config.env
+tools/research-bridge/keys/agent_ed25519
+tools/research-bridge/keys/*.pem
+!tools/research-bridge/keys/*.pub
+!tools/research-bridge/keys/README.md

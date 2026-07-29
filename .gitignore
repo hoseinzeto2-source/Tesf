@@ -9,3 +9,7 @@ tools/physics-dump/dumped/
 !tools/physics-dump/dumped/assets_dump.json
 !tools/physics-dump/dumped/symbols.txt
 *.so
+
+# Research bridge secrets
+tools/research-bridge/config.env
+tools/research-bridge/keys/agent_ed25519
