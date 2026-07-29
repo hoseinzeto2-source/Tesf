@@ -1,0 +1,418 @@
+{
+  "version": "36.14.4",
+  "build": "1013",
+  "package": "com.miniclip.soccerstars",
+  "elf": {
+    "path": "dumped/libgame-SSM-GooglePlay-Gold-Release-Module-1013.so",
+    "size_bytes": 42941752,
+    "class": "ELF64",
+    "type": "DYN (Shared object file)",
+    "machine": "AArch64",
+    "soname": "libgame-SSM-GooglePlay-Gold-Release-Module-1013.so"
+  },
+  "engine": {
+    "name": "SSM/pool",
+    "description": "Billiards-style physics (Miniclip iOS port with embedded GNU ObjC)",
+    "jenkins_module": "SSM-GooglePlay-Gold-Release-Module"
+  },
+  "exported_symbols": [
+    {
+      "address": "000000000295f3d0",
+      "kind": "B",
+      "name": "_golden_shot_board_layout_request_default_instance_"
+    },
+    {
+      "address": "000000000295f3f8",
+      "kind": "B",
+      "name": "_golden_shot_board_layout_response_default_instance_"
+    },
+    {
+      "address": "000000000295f350",
+      "kind": "B",
+      "name": "_golden_shot_board_request_default_instance_"
+    },
+    {
+      "address": "000000000295f370",
+      "kind": "B",
+      "name": "_golden_shot_board_response_default_instance_"
+    },
+    {
+      "address": "000000000295f4d0",
+      "kind": "B",
+      "name": "_golden_shot_referee_request_default_instance_"
+    },
+    {
+      "address": "000000000295f518",
+      "kind": "B",
+      "name": "_golden_shot_referee_response_default_instance_"
+    },
+    {
+      "address": "000000000295f460",
+      "kind": "B",
+      "name": "_golden_shot_result_default_instance_"
+    },
+    {
+      "address": "000000000295f420",
+      "kind": "B",
+      "name": "_golden_shot_taken_default_instance_"
+    },
+    {
+      "address": "000000000295f180",
+      "kind": "B",
+      "name": "_puck_state_default_instance_"
+    },
+    {
+      "address": "00000000025b50e8",
+      "kind": "D",
+      "name": "scc_info_golden_shot_board_layout_request_soccer_2eproto"
+    },
+    {
+      "address": "00000000025b5100",
+      "kind": "D",
+      "name": "scc_info_golden_shot_board_layout_response_soccer_2eproto"
+    },
+    {
+      "address": "00000000025b50b0",
+      "kind": "D",
+      "name": "scc_info_golden_shot_board_request_soccer_2eproto"
+    },
+    {
+      "address": "00000000025b50c8",
+      "kind": "D",
+      "name": "scc_info_golden_shot_board_response_soccer_2eproto"
+    },
+    {
+      "address": "00000000025b5150",
+      "kind": "D",
+      "name": "scc_info_golden_shot_referee_request_soccer_2eproto"
+    },
+    {
+      "address": "00000000025b5168",
+      "kind": "D",
+      "name": "scc_info_golden_shot_referee_response_soccer_2eproto"
+    },
+    {
+      "address": "00000000025b5130",
+      "kind": "D",
+      "name": "scc_info_golden_shot_result_soccer_2eproto"
+    },
+    {
+      "address": "00000000025b5118",
+      "kind": "D",
+      "name": "scc_info_golden_shot_taken_soccer_2eproto"
+    },
+    {
+      "address": "00000000025b5000",
+      "kind": "D",
+      "name": "scc_info_puck_state_soccer_2eproto"
+    },
+    {
+      "address": "00000000025b5018",
+      "kind": "D",
+      "name": "scc_info_shot_outcome_soccer_2eproto"
+    },
+    {
+      "address": "00000000025b5040",
+      "kind": "D",
+      "name": "scc_info_shot_taken_soccer_2eproto"
+    },
+    {
+      "address": "0000000002965338",
+      "kind": "B",
+      "name": "_sFormationPuckSpritePool"
+    },
+    {
+      "address": "0000000002965348",
+      "kind": "B",
+      "name": "_sGreyFormationPuckSpritePool"
+    },
+    {
+      "address": "000000000295f1b0",
+      "kind": "B",
+      "name": "_shot_outcome_default_instance_"
+    },
+    {
+      "address": "000000000295f240",
+      "kind": "B",
+      "name": "_shot_taken_default_instance_"
+    },
+    {
+      "address": "0000000002993a07",
+      "kind": "B",
+      "name": "sInternalVelocity"
+    },
+    {
+      "address": "000000000293fc90",
+      "kind": "B",
+      "name": "_sLockedPuckSpritePool"
+    },
+    {
+      "address": "00000000029939fe",
+      "kind": "B",
+      "name": "sPhysicsDebugDiagnostics"
+    },
+    {
+      "address": "00000000029939ff",
+      "kind": "B",
+      "name": "sPhysicsDebugDiagnosticsComplete"
+    },
+    {
+      "address": "00000000029939f1",
+      "kind": "B",
+      "name": "sPhysicsDebugEnabled"
+    },
+    {
+      "address": "000000000293fc88",
+      "kind": "B",
+      "name": "_sPuckSpritePool"
+    },
+    {
+      "address": "0000000002975d88",
+      "kind": "B",
+      "name": "_sTierCellTrickshotRushPrizesPoolNew"
+    },
+    {
+      "address": "0000000002975af0",
+      "kind": "B",
+      "name": "_sTierCellTrickshotsRulesInnerFramePoolNew"
+    },
+    {
+      "address": "0000000002975d98",
+      "kind": "B",
+      "name": "_sTierCellTrickshotsRushBootsInnerFramePoolNew"
+    },
+    {
+      "address": "0000000002975d90",
+      "kind": "B",
+      "name": "_sTierCellTrickshotsRushRulesInnerFramePoolNew"
+    }
+  ],
+  "strings": {
+    "selectors": {
+      "takeActualShot:angle:spin:playSound:": {
+        "count": 2
+      },
+      "calculateShot:power:angle:spin:": {
+        "count": 2
+      },
+      "calculateFinalPower:forBall:": {
+        "count": 2
+      },
+      "simulateAndSendShot:power:angle:": {
+        "count": 2
+      },
+      "aimTo:angle:power:": {
+        "count": 2
+      },
+      "commitShot": {
+        "count": 2
+      },
+      "stopAllPhysics": {
+        "count": 2
+      },
+      "getBallBallCollision:ballB:time:force:": {
+        "count": 2
+      },
+      "getBallLineCollision:angle:time:force:pointA:pointB:": {
+        "count": 2
+      },
+      "BallBallCollision": {
+        "count": 1
+      },
+      "BallLineCollision": {
+        "count": 1
+      },
+      "playShot:": {
+        "count": 2
+      },
+      "animateShot:": {
+        "count": 2
+      }
+    },
+    "protobuf_messages": {
+      "game_started": true,
+      "aim_event": false,
+      "shot_taken": true,
+      "animation_outcome": true,
+      "shot_outcome": true,
+      "puck_state": true,
+      "referee_field_ready_request": true
+    },
+    "protobuf_fields": {
+      "angle_": true,
+      "power_": false,
+      "puck_id": true,
+      "shot_id": true,
+      "player_id": false,
+      "field_state": true,
+      "owner_enum": true,
+      "state_enum": true,
+      "position": true,
+      "velocity": true
+    },
+    "physics_classes": [
+      "GameSoccerBallSettings",
+      "IceGameSoccerBallSettings",
+      "FireGameSoccerBallSettings",
+      "BaseSoccerBallSettings",
+      "BallSettingsProtocol"
+    ],
+    "physics_members": [
+      "mEdgeRestitutionFactor",
+      "mFriction",
+      "mFrictionFactor",
+      "mMass",
+      "mPowerBars",
+      "mPowerLevel",
+      "mRadius"
+    ],
+    "shot_taken_type_encoding": "{shot_taken=\"_vptr$MessageLite\"^^?\"_internal_metadata_\"{InternalMetadataWithArena=\"ptr_\"^v}\"_has_bits_\"{HasBits<1UL>=\"has_bits_\"[1I]}\"_cached_size_\"{CachedSize=\"size_\"{atomic<int>=\"__a_\"{__cxx_atomic_impl<int, std::__cxx_atomic_base_impl<int>>=\"__a_value\"Ai}}}\"field_state_\"{RepeatedPtrField<puck_state>=\"arena_\"^{Arena}\"current_size_\"i\"total_size_\"i\"rep_\"^{Rep}}\"player_id_\"{ArenaStringPtr=\"ptr_\"^{basic_string<char, std::char_traits<char>, std::allocator<char>>}}\"angle_\"d\"puck_id_\"i\"shot_id_\"i\"pow",
+    "puck_state_type_encoding": "{puck_state=^^?{InternalMetadataWithArena=^v}{HasBits<1UL>=[1I]}{CachedSize={atomic<int>={__cxx_atomic_impl<int, std::__cxx_atomic_base_impl<int>>=Ai}}}^{position}iii}28@0:8@16i24",
+    "ssm_source_paths_sample": [
+      "/opt/jenkins_home/workspace/SSM-GooglePlay-Gold-Release-Module/SSM/pool//opt/jenkins_home/workspace/SSM-GooglePlay-Gold-Release-Module/SSM/pool/ADAAimer.mm",
+      "/opt/jenkins_home/workspace/SSM-GooglePlay-Gold-Release-Module/SSM/pool//opt/jenkins_home/workspace/SSM-GooglePlay-Gold-Release-Module/SSM/pool/ADADataAccess.mm",
+      "/opt/jenkins_home/workspace/SSM-GooglePlay-Gold-Release-Module/SSM/pool//opt/jenkins_home/workspace/SSM-GooglePlay-Gold-Release-Module/SSM/pool/ADAExecutor.mm",
+      "/opt/jenkins_home/workspace/SSM-GooglePlay-Gold-Release-Module/SSM/pool//opt/jenkins_home/workspace/SSM-GooglePlay-Gold-Release-Module/SSM/pool/ADAModel.mm",
+      "/opt/jenkins_home/workspace/SSM-GooglePlay-Gold-Release-Module/SSM/pool//opt/jenkins_home/workspace/SSM-GooglePlay-Gold-Release-Module/SSM/pool/ADAStrategy.mm",
+      "/opt/jenkins_home/workspace/SSM-GooglePlay-Gold-Release-Module/SSM/pool//opt/jenkins_home/workspace/SSM-GooglePlay-Gold-Release-Module/SSM/pool/ANRWatchdogHandler.mm",
+      "/opt/jenkins_home/workspace/SSM-GooglePlay-Gold-Release-Module/SSM/pool//opt/jenkins_home/workspace/SSM-GooglePlay-Gold-Release-Module/SSM/pool/AccountDeletionCancelledPopup.mm",
+      "/opt/jenkins_home/workspace/SSM-GooglePlay-Gold-Release-Module/SSM/pool//opt/jenkins_home/workspace/SSM-GooglePlay-Gold-Release-Module/SSM/pool/AccountDeletionConfirmationPopup.mm",
+      "/opt/jenkins_home/workspace/SSM-GooglePlay-Gold-Release-Module/SSM/pool//opt/jenkins_home/workspace/SSM-GooglePlay-Gold-Release-Module/SSM/pool/AccountDeletionInformationPopup.mm",
+      "/opt/jenkins_home/workspace/SSM-GooglePlay-Gold-Release-Module/SSM/pool//opt/jenkins_home/workspace/SSM-GooglePlay-Gold-Release-Module/SSM/pool/AccountDeletionWarningPopup.mm",
+      "/opt/jenkins_home/workspace/SSM-GooglePlay-Gold-Release-Module/SSM/pool//opt/jenkins_home/workspace/SSM-GooglePlay-Gold-Release-Module/SSM/pool/AccountLoginScreenPrivacyPolicyLabel.mm",
+      "/opt/jenkins_home/workspace/SSM-GooglePlay-Gold-Release-Module/SSM/pool//opt/jenkins_home/workspace/SSM-GooglePlay-Gold-Release-Module/SSM/pool/AchievementManager.mm",
+      "/opt/jenkins_home/workspace/SSM-GooglePlay-Gold-Release-Module/SSM/pool//opt/jenkins_home/workspace/SSM-GooglePlay-Gold-Release-Module/SSM/pool/ActionAnimationSegment.mm",
+      "/opt/jenkins_home/workspace/SSM-GooglePlay-Gold-Release-Module/SSM/pool//opt/jenkins_home/workspace/SSM-GooglePlay-Gold-Release-Module/SSM/pool/AdConsentCMPPopup.mm",
+      "/opt/jenkins_home/workspace/SSM-GooglePlay-Gold-Release-Module/SSM/pool//opt/jenkins_home/workspace/SSM-GooglePlay-Gold-Release-Module/SSM/pool/AdConsentErrorPopup.mm",
+      "/opt/jenkins_home/workspace/SSM-GooglePlay-Gold-Release-Module/SSM/pool//opt/jenkins_home/workspace/SSM-GooglePlay-Gold-Release-Module/SSM/pool/AdConsentInterstitialsPopup.mm",
+      "/opt/jenkins_home/workspace/SSM-GooglePlay-Gold-Release-Module/SSM/pool//opt/jenkins_home/workspace/SSM-GooglePlay-Gold-Release-Module/SSM/pool/AdConsentPopup.mm",
+      "/opt/jenkins_home/workspace/SSM-GooglePlay-Gold-Release-Module/SSM/pool//opt/jenkins_home/workspace/SSM-GooglePlay-Gold-Release-Module/SSM/pool/AdConsentRevokePopup.mm",
+      "/opt/jenkins_home/workspace/SSM-GooglePlay-Gold-Release-Module/SSM/pool//opt/jenkins_home/workspace/SSM-GooglePlay-Gold-Release-Module/SSM/pool/AdsDataAccess.mm",
+      "/opt/jenkins_home/workspace/SSM-GooglePlay-Gold-Release-Module/SSM/pool//opt/jenkins_home/workspace/SSM-GooglePlay-Gold-Release-Module/SSM/pool/AdsModel.mm",
+      "/opt/jenkins_home/workspace/SSM-GooglePlay-Gold-Release-Module/SSM/pool//opt/jenkins_home/workspace/SSM-GooglePlay-Gold-Release-Module/SSM/pool/AgentNode.mm",
+      "/opt/jenkins_home/workspace/SSM-GooglePlay-Gold-Release-Module/SSM/pool//opt/jenkins_home/workspace/SSM-GooglePlay-Gold-Release-Module/SSM/pool/AgentNodeView.mm",
+      "/opt/jenkins_home/workspace/SSM-GooglePlay-Gold-Release-Module/SSM/pool//opt/jenkins_home/workspace/SSM-GooglePlay-Gold-Release-Module/SSM/pool/AgentsModel.mm",
+      "/opt/jenkins_home/workspace/SSM-GooglePlay-Gold-Release-Module/SSM/pool//opt/jenkins_home/workspace/SSM-GooglePlay-Gold-Release-Module/SSM/pool/AnimationPlayer.mm",
+      "/opt/jenkins_home/workspace/SSM-GooglePlay-Gold-Release-Module/SSM/pool//opt/jenkins_home/workspace/SSM-GooglePlay-Gold-Release-Module/SSM/pool/AnimationSegment.mm",
+      "/opt/jenkins_home/workspace/SSM-GooglePlay-Gold-Release-Module/SSM/pool//opt/jenkins_home/workspace/SSM-GooglePlay-Gold-Release-Module/SSM/pool/AppDelegate.mm",
+      "/opt/jenkins_home/workspace/SSM-GooglePlay-Gold-Release-Module/SSM/pool//opt/jenkins_home/workspace/SSM-GooglePlay-Gold-Release-Module/SSM/pool/Ball.mm",
+      "/opt/jenkins_home/workspace/SSM-GooglePlay-Gold-Release-Module/SSM/pool//opt/jenkins_home/workspace/SSM-GooglePlay-Gold-Release-Module/SSM/pool/BaseGachaDetailsPopup.mm",
+      "/opt/jenkins_home/workspace/SSM-GooglePlay-Gold-Release-Module/SSM/pool//opt/jenkins_home/workspace/SSM-GooglePlay-Gold-Release-Module/SSM/pool/BetSelectionPopup.mm",
+      "/opt/jenkins_home/workspace/SSM-GooglePlay-Gold-Release-Module/SSM/pool//opt/jenkins_home/workspace/SSM-GooglePlay-Gold-Release-Module/SSM/pool/BetSelectionPopupButton.mm"
+    ]
+  },
+  "r2_vaddr_strings": {
+    "takeActualShot:angle:spin:playSound:": [
+      "0x00fea754",
+      "0x011be380"
+    ],
+    "calculateShot:power:angle:spin:": [
+      "0x01157944",
+      "0x011bdfc0"
+    ],
+    "calculateFinalPower:forBall:": [
+      "0x01126ea3",
+      "0x011bdfa0"
+    ],
+    "simulateAndSendShot:power:angle:": [
+      "0x010dd115",
+      "0x0117e8a0"
+    ],
+    "aimTo:angle:power:": [
+      "0x0106ce9c",
+      "0x01169140"
+    ],
+    "commitShot": [
+      "0x0112231b",
+      "0x011795c8"
+    ],
+    "stopAllPhysics": [
+      "0x0101eb36",
+      "0x0117e100"
+    ],
+    "getBallBallCollision:ballB:time:force:": [
+      "0x01048f79",
+      "0x011be0d0"
+    ]
+  },
+  "shot_pipeline": [
+    {
+      "step": 1,
+      "phase": "aim",
+      "selector": "aimTo:angle:power:",
+      "desc": "Player drags puck — aim direction + power"
+    },
+    {
+      "step": 2,
+      "phase": "calculate",
+      "selector": "calculateShot:power:angle:spin:",
+      "desc": "Compute shot parameters from drag"
+    },
+    {
+      "step": 3,
+      "phase": "power",
+      "selector": "calculateFinalPower:forBall:",
+      "desc": "Clamp power per ball settings"
+    },
+    {
+      "step": 4,
+      "phase": "simulate",
+      "selector": "simulateAndSendShot:power:angle:",
+      "desc": "Local preview / send to network layer"
+    },
+    {
+      "step": 5,
+      "phase": "execute",
+      "selector": "takeActualShot:angle:spin:playSound:",
+      "desc": "Apply impulse to puck in physics world"
+    },
+    {
+      "step": 6,
+      "phase": "collision",
+      "selector": "getBallBallCollision / getBallLineCollision",
+      "desc": "Ball-ball and ball-wall collisions"
+    },
+    {
+      "step": 7,
+      "phase": "stop",
+      "selector": "stopAllPhysics",
+      "desc": "End turn when all bodies rest"
+    },
+    {
+      "step": 8,
+      "phase": "network",
+      "message": "shot_taken",
+      "fields": [
+        "angle",
+        "power",
+        "puck_id",
+        "shot_id",
+        "field_state"
+      ]
+    },
+    {
+      "step": 9,
+      "phase": "server",
+      "message": "shot_outcome",
+      "fields": [
+        "puck_state[]",
+        "scores",
+        "next_turn"
+      ]
+    }
+  ],
+  "frida_notes": {
+    "lib_module": "libgame-SSM-GooglePlay-Gold-Release-Module-1013.so",
+    "debug_exports": [
+      "sPhysicsDebugEnabled",
+      "sPhysicsDebugDiagnostics",
+      "sInternalVelocity"
+    ],
+    "hook_script": "frida/hook_physics_pipeline.js"
+  },
+  "limitations": [
+    "Online matches are server-authoritative; client lib animates shot_outcome from server.",
+    "takeActualShot is stripped from public exports; hook via ObjC IMP or Ghidra offset.",
+    "Physics constants (mFrictionFactor) are class members, not exported globals."
+  ]
+}
