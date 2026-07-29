@@ -4,6 +4,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstdint>
+#include <mutex>
 
 #include "third_party/And64InlineHook.hpp"
 #include "third_party/imgui.h"
@@ -18,18 +19,21 @@
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
 
+static const int kLibStableFrames = 240; // ~4s after libgame loads before heap scan
+
 static EGLBoolean (*real_eglSwapBuffers)(EGLDisplay, EGLSurface) = nullptr;
 
 static bool imgui_ready = false;
 static bool egl_hooked = false;
 static int swap_frames = 0;
-static HudStatus hud_status;
+static int frames_since_lib = 0;
 static float ui_scale = 2.0f;
+static MatchSnapshot cached_snap;
+static std::mutex snap_mutex;
 static auto last_time = std::chrono::steady_clock::now();
 
 static float computeUiScale(int w, int h) {
     const float short_edge = (float)std::min(w, h);
-    // Balanced mobile scale: readable on phone without covering half the screen
     return std::clamp(short_edge / 480.f, 1.65f, 2.35f);
 }
 
@@ -43,6 +47,11 @@ static void applyMobileStyle(float scale) {
     style.ScrollbarSize = 18.f * scale;
     style.Alpha = 0.90f;
     style.ScaleAllSizes(scale);
+}
+
+static void trackLibFrames() {
+    if (isGameLibLoaded()) frames_since_lib++;
+    else frames_since_lib = 0;
 }
 
 static void tryInitImGui(EGLDisplay dpy, EGLSurface surface) {
@@ -79,6 +88,14 @@ static void tryInitImGui(EGLDisplay dpy, EGLSurface surface) {
     LOGI("ImGui ready GLES3 scale=%.2f font=%.0f display=%dx%d", ui_scale, font_cfg.SizePixels, w, h);
 }
 
+static void refreshSnapshot(int w, int h) {
+    const bool allowScan = frames_since_lib >= kLibStableFrames;
+    MatchSnapshot snap =
+        buildMatchSnapshot(w, h, egl_hooked, swap_frames, frames_since_lib, allowScan);
+    std::lock_guard<std::mutex> lock(snap_mutex);
+    cached_snap = snap;
+}
+
 static void updateDisplaySize(EGLDisplay dpy, EGLSurface surface) {
     if (dpy == EGL_NO_DISPLAY || surface == EGL_NO_SURFACE) return;
     EGLint w = 0, h = 0;
@@ -95,7 +112,9 @@ static void updateDisplaySize(EGLDisplay dpy, EGLSurface surface) {
     io.DisplaySize = ImVec2((float)w, (float)h);
     io.DeltaTime = dt;
 
-    hud_status = buildHudStatus(w, h, egl_hooked, swap_frames);
+    trackLibFrames();
+    if (swap_frames % 15 == 0 || frames_since_lib == 1 || frames_since_lib == kLibStableFrames)
+        refreshSnapshot(w, h);
 }
 
 static void drawResearchHud() {
@@ -109,33 +128,59 @@ static void drawResearchHud() {
 
     ImGui::Begin("SSM HUD", nullptr, flags);
 
-    const HudStatus& s = hud_status;
+    std::lock_guard<std::mutex> lock(snap_mutex);
+    const MatchSnapshot& s = cached_snap;
 
     ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.35f, 1.f, 0.55f, 1.f));
     ImGui::TextUnformatted("READ-ONLY RESEARCH HUD");
     ImGui::PopStyleColor();
     ImGui::Separator();
-    ImGui::Spacing();
 
     ImGui::Text("Display: %d x %d", s.display_w, s.display_h);
-    ImGui::Text("HUD frames: %d", s.swap_frames);
-    ImGui::Text("EGL hook: %s", s.egl_hooked ? "active" : "waiting");
+    ImGui::Text("libgame: %s", s.exports.lib_loaded ? "loaded" : "not yet");
+  if (!s.exports.lib_loaded) {
+        ImGui::TextColored(ImVec4(1.f, 0.75f, 0.3f, 1.f), "Enter a match for live data");
+    } else if (!s.live_scan_active) {
+        ImGui::TextColored(ImVec4(1.f, 0.75f, 0.3f, 1.f),
+                           "Live scan in ~%ds (match loading...)",
+                           (kLibStableFrames - s.frames_since_lib + 59) / 60);
+    } else {
+        ImGui::TextColored(ImVec4(0.4f, 1.f, 0.5f, 1.f), "LIVE scan active");
+    }
 
-    ImGui::Spacing();
     ImGui::Separator();
-    ImGui::Spacing();
+    ImGui::TextUnformatted("MATCH");
+    if (s.score_home >= 0.f && s.score_away >= 0.f)
+        ImGui::Text("Score (est.): %d : %d", (int)s.score_home, (int)s.score_away);
+    else
+        ImGui::Text("Score: see game HUD (1:0 etc.)");
 
-    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.f, 0.85f, 0.35f, 1.f));
-    ImGui::TextUnformatted("SAFE MODE");
-    ImGui::PopStyleColor();
-    ImGui::Spacing();
+    if (s.ball_valid) {
+        ImGui::Text("Ball X: %.4f  Y: %.4f", s.ball_x, s.ball_y);
+        ImGui::Text("Ball Vx: %.4f  Vy: %.4f", s.ball_vx, s.ball_vy);
+    } else if (s.live_scan_active) {
+        ImGui::TextColored(ImVec4(1.f, 0.5f, 0.4f, 1.f), "Ball: scanning...");
+    } else {
+        ImGui::Text("Ball: waiting for match");
+    }
 
-    ImGui::TextWrapped(
-        "Game memory scan is OFF so Play / match start stays stable. "
-        "Ball, score, and physics values are not read from the process.");
-    ImGui::Spacing();
-    ImGui::TextWrapped(
-        "Overlay only — no memory scan, no shot injection.");
+    if (s.live_scan_active) {
+        ImGui::Text("Pucks (est.): %d", s.puck_estimate);
+        ImGui::Text("Bodies: %d", s.body_count);
+    }
+
+    ImGui::Separator();
+    ImGui::TextUnformatted("PHYSICS");
+    if (s.exports.lib_loaded) {
+        ImGui::Text("sInternalVelocity: %.4f", s.exports.internal_velocity);
+        ImGui::Text("physics_debug: %d  diag: %d", s.exports.physics_debug, s.exports.physics_diag);
+    } else {
+        ImGui::Text("Physics exports: N/A");
+    }
+    ImGui::TextUnformatted("Field: 2D (X,Y only)");
+
+    ImGui::Separator();
+    ImGui::TextWrapped("Read-only overlay. No shot injection.");
 
     ImGui::End();
 }
@@ -191,7 +236,7 @@ static void installEglHook() {
 extern "C" JNIEXPORT jint JNI_OnLoad(JavaVM* vm, void* reserved) {
     (void)vm;
     (void)reserved;
-    LOGI("ssm_research_hud loaded (egl-only safe HUD)");
+    LOGI("ssm_research_hud loaded (egl HUD + deferred live read)");
     installEglHook();
     return JNI_VERSION_1_6;
 }
