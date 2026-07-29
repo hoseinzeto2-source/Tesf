@@ -389,6 +389,7 @@ void mergeHookSnapshot(MatchSnapshot& dst) {
     dst.hooks_patched = g_hooks_patched;
     if (g_hook_cache.data_source == DataSource::None) return;
 
+    // Prefer hook data when present; heap scan fills gaps below via commitHeapSnapshot
     dst.data_source = g_hook_cache.data_source;
     if (g_hook_cache.score_home >= 0.f) dst.score_home = g_hook_cache.score_home;
     if (g_hook_cache.score_away >= 0.f) dst.score_away = g_hook_cache.score_away;
@@ -397,11 +398,35 @@ void mergeHookSnapshot(MatchSnapshot& dst) {
         dst.ball_x = g_hook_cache.ball_x;
         dst.ball_y = g_hook_cache.ball_y;
     }
-    dst.body_count = g_hook_cache.body_count;
-    dst.puck_estimate = g_hook_cache.puck_estimate;
+    if (g_hook_cache.body_count > 0) {
+        dst.body_count = g_hook_cache.body_count;
+        dst.puck_estimate = g_hook_cache.puck_estimate;
+    }
     if (g_hook_cache.shot_angle >= 0.f) dst.shot_angle = g_hook_cache.shot_angle;
     if (g_hook_cache.shot_power >= 0.f) dst.shot_power = g_hook_cache.shot_power;
     memcpy(dst.last_hook_sel, g_hook_cache.last_hook_sel, sizeof(dst.last_hook_sel));
+}
+
+void commitHeapSnapshot(const MatchSnapshot& snap) {
+    std::lock_guard<std::mutex> lock(g_hook_mutex);
+    // Only fill fields hooks have not provided yet
+    if (g_hook_cache.score_home < 0.f && snap.score_home >= 0.f) {
+        g_hook_cache.score_home = snap.score_home;
+        g_hook_cache.score_away = snap.score_away;
+    }
+    if (!g_hook_cache.ball_valid && snap.ball_valid) {
+        g_hook_cache.ball_valid = true;
+        g_hook_cache.ball_x = snap.ball_x;
+        g_hook_cache.ball_y = snap.ball_y;
+    }
+    if (g_hook_cache.body_count <= 0 && snap.body_count > 0) {
+        g_hook_cache.body_count = snap.body_count;
+        g_hook_cache.puck_estimate = snap.puck_estimate;
+    }
+    if (g_hook_cache.data_source == DataSource::None && snap.data_source != DataSource::None) {
+        g_hook_cache.data_source = snap.data_source;
+        strncpy(g_hook_cache.last_hook_sel, "heap_scan", sizeof(g_hook_cache.last_hook_sel) - 1);
+    }
 }
 
 void telemetrySetHookPatchedCount(int n) {

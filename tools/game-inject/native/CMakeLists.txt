@@ -15,6 +15,7 @@ add_library(ssm_research_hud SHARED
     log_ring.cpp
     github_gist.cpp
     diagnostic.cpp
+    heap_scan.cpp
     ${IMGUI_DIR}/imgui.cpp
     ${IMGUI_DIR}/imgui_draw.cpp
     ${IMGUI_DIR}/imgui_tables.cpp

@@ -8,9 +8,13 @@ public final class RootHelper {
     private RootHelper() {}
 
     public static Result runSu(String command) {
+        return runSu(command, 12);
+    }
+
+    public static Result runSu(String command, int timeoutSec) {
         try {
             Process p = Runtime.getRuntime().exec(new String[]{"su", "-c", command});
-            boolean finished = p.waitFor(12, TimeUnit.SECONDS);
+            boolean finished = p.waitFor(timeoutSec, TimeUnit.SECONDS);
             if (!finished) {
                 p.destroyForcibly();
                 return Result.fail("su timeout");
@@ -23,6 +27,27 @@ public final class RootHelper {
         } catch (Exception e) {
             return Result.fail(e.getMessage() == null ? "su failed" : e.getMessage());
         }
+    }
+
+    /**
+     * Hot-patch research HUD .so inside installed arm64 split (root).
+     * Source: /sdcard/Download/libssm_research_hud.so
+     */
+    public static Result hotpatchHudSo() {
+        String cmd =
+                "SRC=/sdcard/Download/libssm_research_hud.so; "
+                        + "test -f $SRC || exit 11; "
+                        + "SPLIT=$(pm path com.miniclip.soccerstars 2>/dev/null | grep arm64 | head -1 | cut -d: -f2); "
+                        + "test -n \"$SPLIT\" || exit 12; "
+                        + "WORKDIR=/data/local/tmp/ssm_hotpatch; rm -rf $WORKDIR; mkdir -p $WORKDIR/lib/arm64-v8a; "
+                        + "cp -f \"$SPLIT\" $WORKDIR/split.apk; "
+                        + "cp -f $SRC $WORKDIR/lib/arm64-v8a/libssm_research_hud.so; "
+                        + "cd $WORKDIR && (command -v zip >/dev/null && zip -0 -u split.apk lib/arm64-v8a/libssm_research_hud.so || exit 13); "
+                        + "cp -f $WORKDIR/split.apk \"$SPLIT\"; "
+                        + "chmod 644 \"$SPLIT\"; "
+                        + "am force-stop com.miniclip.soccerstars; "
+                        + "echo HOTPATCH_OK size=$(stat -c%s $SRC) split=$SPLIT";
+        return runSu(cmd, 90);
     }
 
     public static Result enableAdbTcp(int port) {

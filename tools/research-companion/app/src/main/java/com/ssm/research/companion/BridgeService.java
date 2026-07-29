@@ -7,9 +7,7 @@ import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Intent;
 import android.os.Build;
-import android.os.Handler;
 import android.os.IBinder;
-import android.os.Looper;
 import android.util.Log;
 
 import androidx.core.app.NotificationCompat;
@@ -28,10 +26,8 @@ public class BridgeService extends Service {
     private static final int NOTIF_ID = 42;
 
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
-    private final Handler main = new Handler(Looper.getMainLooper());
     private final AtomicBoolean running = new AtomicBoolean(false);
     private SshTunnel tunnel;
-    private Runnable heartbeatLoop;
 
     @Override
     public void onCreate() {
@@ -59,59 +55,84 @@ public class BridgeService extends Service {
         int backoff = 3;
         while (running.get()) {
             try {
-                broadcast("connecting", "SSH → " + BridgeConfig.VPS_HOST);
+                // 1) SSH first — never block on Magisk/root before tunnel is up
+                broadcast("connecting", "۱/۳ اتصال SSH به " + BridgeConfig.VPS_HOST + " …");
+                updateNotification("SSH در حال اتصال…");
+                tunnel.connect();
+                tunnel.heartbeat("connect");
+                broadcast("connecting", "۲/۳ تونل SSH برقرار — آماده‌سازی ADB…");
 
-                RootHelper.Result adb = RootHelper.enableAdbTcp(BridgeConfig.PHONE_ADB_PORT);
-                String adbMsg = adb.ok ? ("ADB TCP " + BridgeConfig.PHONE_ADB_PORT + " OK")
-                        : ("ADB TCP fail: " + adb.output);
+                // 2) Root helpers AFTER SSH (short timeouts; never block forever)
+                String adbMsg = "adb skip";
+                try {
+                    RootHelper.Result adb = RootHelper.runSu(
+                            "setprop service.adb.tcp.port " + BridgeConfig.PHONE_ADB_PORT
+                                    + "; stop adbd; start adbd; getprop service.adb.tcp.port",
+                            5);
+                    adbMsg = adb.ok ? ("ADB TCP " + adb.output) : ("ADB soft-fail: " + adb.output);
+                } catch (Exception e) {
+                    adbMsg = "ADB soft-fail: " + e.getMessage();
+                }
 
-                String keyMsg = "adbkey skip";
                 try {
                     try (java.io.InputStream in = getAssets().open("adbkey.pub");
                          java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream()) {
                         byte[] buf = new byte[1024];
                         int n;
                         while ((n = in.read(buf)) > 0) bos.write(buf, 0, n);
-                        String pub = bos.toString("UTF-8").trim();
-                        RootHelper.Result kr = RootHelper.installAdbKey(pub);
-                        keyMsg = kr.ok ? ("adbkey OK " + kr.output) : ("adbkey fail " + kr.output);
+                        RootHelper.installAdbKey(bos.toString("UTF-8").trim());
                     }
-                } catch (Exception ke) {
-                    keyMsg = "adbkey err " + ke.getMessage();
+                } catch (Exception ignored) {
                 }
 
-                tunnel.connect();
-                tunnel.heartbeat("alive");
+                // 3) Hotpatch optional — do NOT block connect UI
+                broadcast("connecting", "۳/۳ بررسی hotpatch (اختیاری)…");
+                String hpMsg = "hotpatch skipped";
+                try {
+                    RootHelper.Result hp = RootHelper.runSu(
+                            "test -f /sdcard/Download/libssm_research_hud.so && echo HAS_SO || echo NO_SO",
+                            3);
+                    if (hp.ok && hp.output.contains("HAS_SO")) {
+                        RootHelper.Result patch = RootHelper.hotpatchHudSo();
+                        hpMsg = patch.ok ? ("hotpatch OK") : ("hotpatch fail (tunnel OK): " + patch.output);
+                    } else {
+                        hpMsg = "no so on sdcard — skip";
+                    }
+                } catch (Exception e) {
+                    hpMsg = "hotpatch skip: " + e.getMessage();
+                }
 
-                String detail = "Connected\nVPS " + BridgeConfig.VPS_HOST
-                        + "\nADB reverse :" + BridgeConfig.VPS_ADB_PORT
-                        + " → phone :" + BridgeConfig.PHONE_ADB_PORT
+                String detail = "✅ متصل\nVPS " + BridgeConfig.VPS_HOST
+                        + "\nADB :" + BridgeConfig.VPS_ADB_PORT + " → phone :" + BridgeConfig.PHONE_ADB_PORT
                         + "\n" + adbMsg
-                        + "\n" + keyMsg
-                        + "\nModel " + Build.MODEL;
+                        + "\n" + hpMsg
+                        + "\n" + Build.MODEL;
                 broadcast("connected", detail);
-                updateNotification("تونل فعال — Agent می‌تواند وصل شود");
+                updateNotification("متصل به VPS");
 
                 backoff = 3;
                 while (running.get() && tunnel.isConnected()) {
                     try {
-                        Thread.sleep(25000);
+                        Thread.sleep(20000);
                     } catch (InterruptedException ie) {
                         break;
                     }
                     tunnel.heartbeat("tick");
-                    broadcast("connected", detail + "\nlast beat " + System.currentTimeMillis());
+                }
+                if (running.get()) {
+                    broadcast("connecting", "تونل قطع شد — تلاش مجدد…");
                 }
             } catch (Exception e) {
                 Log.e(TAG, "tunnel error", e);
-                broadcast("error", "خطا: " + e.getMessage());
-                updateNotification("قطع شد — تلاش مجدد…");
+                String msg = e.getMessage() == null ? e.toString() : e.getMessage();
+                broadcast("error", "خطا: " + msg + "\n(۵ ثانیه بعد تلاش مجدد)");
+                updateNotification("خطا — تلاش مجدد");
                 tunnel.disconnect();
                 try {
                     Thread.sleep(backoff * 1000L);
                 } catch (InterruptedException ignored) {
                 }
-                backoff = Math.min(backoff * 2, 60);
+                backoff = Math.min(backoff * 2, 30);
             }
         }
         tunnel.disconnect();

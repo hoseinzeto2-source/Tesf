@@ -4,6 +4,7 @@
 #include "log_ring.h"
 #include "github_gist.h"
 #include "diagnostic.h"
+#include "heap_scan.h"
 
 #include <algorithm>
 #include <chrono>
@@ -115,16 +116,43 @@ static void tryInitImGui(EGLDisplay dpy, EGLSurface surface) {
 }
 
 static void refreshSnapshot(int w, int h) {
-    std::lock_guard<std::mutex> lock(snap_mutex);
-    cached_snap.display_w = w;
-    cached_snap.display_h = h;
-    cached_snap.swap_frames = swap_frames;
-    cached_snap.frames_since_lib = frames_since_lib;
-    cached_snap.egl_hooked = egl_hooked;
-    cached_snap.hooks_installed = gameHooksInstalled();
-    cached_snap.update_tick++;
-    cached_snap.exports = readGameExportsCached();
-    mergeHookSnapshot(cached_snap);
+    // Heavy work outside HUD mutex
+    MatchSnapshot heap{};
+    bool heap_ok = false;
+    if ((swap_frames % 45) == 0 && isGameLibLoaded()) {
+        heap_ok = heapScanMatch(heap);
+        if (heap_ok) commitHeapSnapshot(heap);
+    }
+
+    {
+        std::lock_guard<std::mutex> lock(snap_mutex);
+        cached_snap.display_w = w;
+        cached_snap.display_h = h;
+        cached_snap.swap_frames = swap_frames;
+        cached_snap.frames_since_lib = frames_since_lib;
+        cached_snap.egl_hooked = egl_hooked;
+        cached_snap.hooks_installed = gameHooksInstalled();
+        cached_snap.update_tick++;
+        cached_snap.exports = readGameExportsCached();
+        mergeHookSnapshot(cached_snap);
+    }
+
+    // Auto-dump for remote agent (~every 3s @60fps)
+    if ((swap_frames % 90) == 0 && isGameLibLoaded()) {
+        MatchSnapshot copy{};
+        {
+            std::lock_guard<std::mutex> lock(snap_mutex);
+            copy = cached_snap;
+        }
+        HookDiagnostics dd{};
+        dd.libgame_loaded = true;
+        dd.hooks_installed = gameHooksInstalled();
+        dd.hooks_patched = getHookPatchedCount();
+        dd.hook_events = getHookEventCount();
+        dd.touch_hooks = touchHooksInstalled();
+        size_t n = buildDiagnosticJson(g_json_dump, sizeof(g_json_dump), copy, dd);
+        writeDiagnosticFile(g_json_dump, n);
+    }
 }
 
 static void updateDisplaySize(EGLDisplay dpy, EGLSurface surface) {
@@ -155,6 +183,8 @@ static const char* dataSourceLabel(DataSource ds) {
         case DataSource::HookGameStarted: return "game_started protobuf";
         case DataSource::HookNetworkReq: return "req.shot_outcome_data_";
         case DataSource::HookShotTaken: return "shot_taken field_state";
+        case DataSource::HeapScan: return "heap memory scan";
+        case DataSource::PhysicsExports: return "physics exports";
         default: return "waiting for match event";
     }
 }

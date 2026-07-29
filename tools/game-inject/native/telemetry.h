@@ -16,6 +16,7 @@ enum class DataSource : uint8_t {
     HookGameStarted = 3,
     HookNetworkReq = 4,
     HookShotTaken = 5,
+    HeapScan = 6,
 };
 
 struct MatchSnapshot {
@@ -52,6 +53,7 @@ bool parseShotTakenObject(const void* obj, MatchSnapshot& out);
 bool parseNetworkRequest(const void* req, MatchSnapshot& out);
 void commitHookSnapshot(const MatchSnapshot& snap, const char* sel_name);
 void mergeHookSnapshot(MatchSnapshot& dst);
+void commitHeapSnapshot(const MatchSnapshot& snap);
 int getHookPatchedCount();
 int getHookEventCount();
 void telemetrySetHookPatchedCount(int n);

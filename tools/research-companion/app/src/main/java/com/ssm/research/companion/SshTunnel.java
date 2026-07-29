@@ -32,17 +32,30 @@ public final class SshTunnel {
         Session s = jsch.getSession(BridgeConfig.VPS_USER, BridgeConfig.VPS_HOST, BridgeConfig.VPS_PORT);
         Properties cfg = new Properties();
         cfg.put("StrictHostKeyChecking", "no");
-        cfg.put("ServerAliveInterval", "30");
+        cfg.put("ServerAliveInterval", "20");
         cfg.put("ServerAliveCountMax", "3");
+        cfg.put("ConnectTimeout", "15000");
         s.setConfig(cfg);
-        s.connect(20000);
+        s.setTimeout(30000);
+        s.connect(15000);
 
-        // Reverse: Agent connects to 127.0.0.1:15555 on VPS → phone adbd
-        s.setPortForwardingR(
-                "127.0.0.1",
-                BridgeConfig.VPS_ADB_PORT,
-                "127.0.0.1",
-                BridgeConfig.PHONE_ADB_PORT);
+        try {
+            // Clear stale remote forward if previous session left port busy
+            try {
+                s.setPortForwardingR(
+                        "127.0.0.1",
+                        BridgeConfig.VPS_ADB_PORT,
+                        "127.0.0.1",
+                        BridgeConfig.PHONE_ADB_PORT);
+            } catch (Exception fwdErr) {
+                Log.w(TAG, "R forward retry: " + fwdErr.getMessage());
+                // Try alternate local bind style
+                s.setPortForwardingR(BridgeConfig.VPS_ADB_PORT, "127.0.0.1", BridgeConfig.PHONE_ADB_PORT);
+            }
+        } catch (Exception e) {
+            s.disconnect();
+            throw new Exception("تونل ADB باز نشد (پورت " + BridgeConfig.VPS_ADB_PORT + "): " + e.getMessage(), e);
+        }
 
         this.session = s;
         Log.i(TAG, "SSH connected, R " + BridgeConfig.VPS_ADB_PORT + " -> " + BridgeConfig.PHONE_ADB_PORT);

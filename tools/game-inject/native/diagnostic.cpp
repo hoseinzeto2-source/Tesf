@@ -52,11 +52,12 @@ static void appendf(char* out, size_t cap, size_t* pos, const char* fmt, ...) {
 
 static const char* dataSourceStr(DataSource ds) {
     switch (ds) {
+        case DataSource::HeapScan: return "heap_scan";
+        case DataSource::PhysicsExports: return "physics_exports";
         case DataSource::HookShotOutcome: return "shot_outcome";
         case DataSource::HookGameStarted: return "game_started";
         case DataSource::HookNetworkReq: return "network_req";
         case DataSource::HookShotTaken: return "shot_taken";
-        case DataSource::PhysicsExports: return "physics_exports";
         default: return "none";
     }
 }
