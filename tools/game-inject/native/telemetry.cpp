@@ -29,6 +29,7 @@ static SymbolCache g_syms;
 static MatchSnapshot g_hook_cache;
 static std::mutex g_hook_mutex;
 static int g_hook_events = 0;
+static int g_hooks_patched = 0;
 
 static void* gameHandle() {
     return dlopen(kGameLib, RTLD_NOLOAD);
@@ -38,11 +39,17 @@ bool isGameLibLoaded() {
     return gameHandle() != nullptr;
 }
 
+int getHookPatchedCount() {
+    std::lock_guard<std::mutex> lock(g_hook_mutex);
+    return g_hooks_patched;
+}
+
 void resetLiveScanState() {
     g_syms.resolved = false;
     std::lock_guard<std::mutex> lock(g_hook_mutex);
     g_hook_cache = MatchSnapshot{};
     g_hook_events = 0;
+    g_hooks_patched = 0;
 }
 
 static void resolveSymbols() {
@@ -100,9 +107,7 @@ static bool parsePuckPosition(void* puck_obj, float& x, float& y, int32_t& puck_
 
         x = (float)dx;
         y = (float)dy;
-        if (off + 12 <= 96) {
-            safeRead(p + off + 8, &puck_id, sizeof(int32_t));
-        }
+        if (off + 12 <= 96) safeRead(p + off + 8, &puck_id, sizeof(int32_t));
         return true;
     }
     return false;
@@ -147,7 +152,31 @@ static void ingestFieldState(const RepeatedPtrFieldView& field, MatchSnapshot& s
     snap.puck_estimate = puck_count - (snap.ball_valid ? 1 : 0);
 }
 
-static bool tryParseShotOutcomeAt(const uint8_t* obj, size_t max_len, MatchSnapshot& snap) {
+static bool tryParseShotOutcomeFast(const uint8_t* obj, MatchSnapshot& snap) {
+  // protobuf shot_outcome layout (build 1013): field_state @ +24, scores @ +116
+    constexpr size_t kFieldOff = 24;
+    constexpr size_t kScoreOff = 116;
+
+    if (!isReadable(obj, kScoreOff + 8)) return false;
+
+    RepeatedPtrFieldView field_state{};
+    if (!readRepeatedPtrField(obj + kFieldOff, field_state)) return false;
+
+    RepeatedPtrFieldView goal_bonus{};
+    if (!readRepeatedPtrField(obj + kFieldOff + 16, goal_bonus)) return false;
+
+    int32_t home = 0, away = 0;
+    if (!safeRead(obj + kScoreOff, &home, sizeof(int32_t))) return false;
+    if (!safeRead(obj + kScoreOff + 4, &away, sizeof(int32_t))) return false;
+    if (home < 0 || home > 15 || away < 0 || away > 15 || home + away > 25) return false;
+
+    snap.score_home = (float)home;
+    snap.score_away = (float)away;
+    ingestFieldState(field_state, snap);
+    return true;
+}
+
+static bool tryParseShotOutcomeScan(const uint8_t* obj, size_t max_len, MatchSnapshot& snap) {
     if (!obj || max_len < 160 || !isReadable(obj, 160)) return false;
 
     for (size_t off = 0; off + 160 <= max_len; off += 8) {
@@ -156,7 +185,7 @@ static bool tryParseShotOutcomeAt(const uint8_t* obj, size_t max_len, MatchSnaps
         if (!readRepeatedPtrField(obj + off, field_state)) continue;
         if (!readRepeatedPtrField(obj + off + 16, goal_bonus)) continue;
 
-        for (size_t score_off = off + 32; score_off + 8 < off + 160; score_off += 4) {
+        for (size_t score_off = off + 32; score_off + 8 < off + 180 && score_off + 8 <= max_len; score_off += 4) {
             int32_t home = 0, away = 0;
             if (!safeRead(obj + score_off, &home, sizeof(int32_t))) continue;
             if (!safeRead(obj + score_off + 4, &away, sizeof(int32_t))) continue;
@@ -172,36 +201,55 @@ static bool tryParseShotOutcomeAt(const uint8_t* obj, size_t max_len, MatchSnaps
     return false;
 }
 
+static void copySnapshotFields(const MatchSnapshot& src, MatchSnapshot& dst) {
+    if (src.score_home >= 0.f) dst.score_home = src.score_home;
+    if (src.score_away >= 0.f) dst.score_away = src.score_away;
+    dst.ball_x = src.ball_x;
+    dst.ball_y = src.ball_y;
+    dst.ball_valid = src.ball_valid;
+    dst.body_count = src.body_count;
+    dst.puck_estimate = src.puck_estimate;
+    dst.data_source = src.data_source;
+    if (src.shot_angle >= 0.f) dst.shot_angle = src.shot_angle;
+    if (src.shot_power >= 0.f) dst.shot_power = src.shot_power;
+}
+
 bool parseShotOutcomeObject(const void* obj, MatchSnapshot& out) {
-    if (!obj || !isReadable(obj, 256)) return false;
+    if (!obj || !isReadable(obj, 128)) return false;
+    const auto* p = reinterpret_cast<const uint8_t*>(obj);
+
     MatchSnapshot snap;
-    if (!tryParseShotOutcomeAt(reinterpret_cast<const uint8_t*>(obj), 256, snap)) return false;
-    out.score_home = snap.score_home;
-    out.score_away = snap.score_away;
-    out.ball_x = snap.ball_x;
-    out.ball_y = snap.ball_y;
-    out.ball_valid = snap.ball_valid;
-    out.body_count = snap.body_count;
-    out.puck_estimate = snap.puck_estimate;
-    out.data_source = DataSource::HookShotOutcome;
-    return true;
+    if (tryParseShotOutcomeFast(p, snap) || tryParseShotOutcomeScan(p, 512, snap)) {
+        copySnapshotFields(snap, out);
+        out.data_source = DataSource::HookShotOutcome;
+        return true;
+    }
+    return false;
 }
 
 bool parseGameStartedObject(const void* obj, MatchSnapshot& out) {
     if (!obj || !isReadable(obj, 128)) return false;
     const auto* p = reinterpret_cast<const uint8_t*>(obj);
 
-    for (size_t off = 0; off + 32 < 128; off += 8) {
-        RepeatedPtrFieldView field{};
-        if (!readRepeatedPtrField(p + off, field)) continue;
+    constexpr size_t kFieldOff = 24;
+    RepeatedPtrFieldView field{};
+    if (readRepeatedPtrField(p + kFieldOff, field)) {
         MatchSnapshot snap;
         ingestFieldState(field, snap);
         if (snap.body_count > 0) {
-            out.ball_x = snap.ball_x;
-            out.ball_y = snap.ball_y;
-            out.ball_valid = snap.ball_valid;
-            out.body_count = snap.body_count;
-            out.puck_estimate = snap.puck_estimate;
+            copySnapshotFields(snap, out);
+            out.data_source = DataSource::HookGameStarted;
+            return true;
+        }
+    }
+
+    for (size_t off = 0; off + 32 < 128; off += 8) {
+        RepeatedPtrFieldView field_scan{};
+        if (!readRepeatedPtrField(p + off, field_scan)) continue;
+        MatchSnapshot snap;
+        ingestFieldState(field_scan, snap);
+        if (snap.body_count > 0) {
+            copySnapshotFields(snap, out);
             out.data_source = DataSource::HookGameStarted;
             return true;
         }
@@ -209,15 +257,131 @@ bool parseGameStartedObject(const void* obj, MatchSnapshot& out) {
     return false;
 }
 
-void commitHookSnapshot(const MatchSnapshot& snap) {
+bool parseShotTakenObject(const void* obj, MatchSnapshot& out) {
+    if (!obj || !isReadable(obj, 80)) return false;
+    const auto* p = reinterpret_cast<const uint8_t*>(obj);
+
+    constexpr size_t kFieldOff = 24;
+    constexpr size_t kAngleOff = 56;
+    constexpr size_t kPowerOff = 64;
+
+    RepeatedPtrFieldView field{};
+    if (!readRepeatedPtrField(p + kFieldOff, field)) return false;
+
+    MatchSnapshot snap;
+    ingestFieldState(field, snap);
+    if (snap.body_count <= 0) return false;
+
+    double angle = 0, power = 0;
+    if (safeRead(p + kAngleOff, &angle, sizeof(double))) {
+        if (angle >= -6.5 && angle <= 6.5) snap.shot_angle = (float)angle;
+    }
+    if (safeRead(p + kPowerOff, &power, sizeof(double))) {
+        if (power >= 0.f && power <= 2.f) snap.shot_power = (float)power;
+    }
+
+    copySnapshotFields(snap, out);
+    out.data_source = DataSource::HookShotTaken;
+    return true;
+}
+
+static bool parseNetworkRequestFast(const uint8_t* req, MatchSnapshot& out) {
+    // req protobuf pointer fields (build 1013 layout from type encoding)
+    constexpr size_t kOffShotTaken = 392;
+    constexpr size_t kOffShotOutcome = 416;
+    constexpr size_t kOffGameStarted = 608;
+
+    if (!isReadable(req, kOffGameStarted + 8)) return false;
+
+    void* shot_taken = nullptr;
+    void* shot_outcome = nullptr;
+    void* game_started = nullptr;
+    if (!safeRead(req + kOffShotOutcome, &shot_outcome, sizeof(void*))) return false;
+    if (!safeRead(req + kOffShotTaken, &shot_taken, sizeof(void*))) return false;
+    if (!safeRead(req + kOffGameStarted, &game_started, sizeof(void*))) return false;
+
+    MatchSnapshot snap;
+    if (isValidPtr(shot_outcome) && parseShotOutcomeObject(shot_outcome, snap)) {
+        copySnapshotFields(snap, out);
+        out.data_source = DataSource::HookNetworkReq;
+        return true;
+    }
+    if (isValidPtr(game_started) && parseGameStartedObject(game_started, snap)) {
+        copySnapshotFields(snap, out);
+        out.data_source = DataSource::HookNetworkReq;
+        return true;
+    }
+    if (isValidPtr(shot_taken) && parseShotTakenObject(shot_taken, snap)) {
+        copySnapshotFields(snap, out);
+        out.data_source = DataSource::HookNetworkReq;
+        return true;
+    }
+    return false;
+}
+
+static bool parseNetworkRequestScan(const uint8_t* p, MatchSnapshot& out) {
+    for (size_t off = 0; off + 8 < 1024; off += 8) {
+        void* ptr = nullptr;
+        if (!safeRead(p + off, &ptr, sizeof(void*))) continue;
+        if (!isValidPtr(ptr)) continue;
+
+        MatchSnapshot snap;
+        if (parseShotOutcomeObject(ptr, snap)) {
+            copySnapshotFields(snap, out);
+            out.data_source = DataSource::HookNetworkReq;
+            return true;
+        }
+        if (parseGameStartedObject(ptr, snap)) {
+            copySnapshotFields(snap, out);
+            out.data_source = DataSource::HookNetworkReq;
+            return true;
+        }
+        if (parseShotTakenObject(ptr, snap)) {
+            copySnapshotFields(snap, out);
+            out.data_source = DataSource::HookNetworkReq;
+            return true;
+        }
+    }
+    return false;
+}
+
+bool parseNetworkRequest(const void* req, MatchSnapshot& out) {
+    if (!req || !isReadable(req, 128)) return false;
+    const auto* p = reinterpret_cast<const uint8_t*>(req);
+
+    if (parseNetworkRequestFast(p, out)) return true;
+    return parseNetworkRequestScan(p, out);
+}
+
+void commitHookSnapshot(const MatchSnapshot& snap, const char* sel_name) {
     std::lock_guard<std::mutex> lock(g_hook_mutex);
-    g_hook_cache = snap;
+
+    if (snap.score_home >= 0.f) g_hook_cache.score_home = snap.score_home;
+    if (snap.score_away >= 0.f) g_hook_cache.score_away = snap.score_away;
+    if (snap.ball_valid) {
+        g_hook_cache.ball_valid = true;
+        g_hook_cache.ball_x = snap.ball_x;
+        g_hook_cache.ball_y = snap.ball_y;
+    }
+    if (snap.body_count > 0) {
+        g_hook_cache.body_count = snap.body_count;
+        g_hook_cache.puck_estimate = snap.puck_estimate;
+    }
+    if (snap.shot_angle >= 0.f) g_hook_cache.shot_angle = snap.shot_angle;
+    if (snap.shot_power >= 0.f) g_hook_cache.shot_power = snap.shot_power;
+    if (snap.data_source != DataSource::None) g_hook_cache.data_source = snap.data_source;
+
     g_hook_events++;
+    if (sel_name) {
+        strncpy(g_hook_cache.last_hook_sel, sel_name, sizeof(g_hook_cache.last_hook_sel) - 1);
+        g_hook_cache.last_hook_sel[sizeof(g_hook_cache.last_hook_sel) - 1] = '\0';
+    }
 }
 
 void mergeHookSnapshot(MatchSnapshot& dst) {
     std::lock_guard<std::mutex> lock(g_hook_mutex);
     dst.hook_events = g_hook_events;
+    dst.hooks_patched = g_hooks_patched;
     if (g_hook_cache.data_source == DataSource::None) return;
 
     dst.data_source = g_hook_cache.data_source;
@@ -230,4 +394,12 @@ void mergeHookSnapshot(MatchSnapshot& dst) {
     }
     dst.body_count = g_hook_cache.body_count;
     dst.puck_estimate = g_hook_cache.puck_estimate;
+    if (g_hook_cache.shot_angle >= 0.f) dst.shot_angle = g_hook_cache.shot_angle;
+    if (g_hook_cache.shot_power >= 0.f) dst.shot_power = g_hook_cache.shot_power;
+    memcpy(dst.last_hook_sel, g_hook_cache.last_hook_sel, sizeof(dst.last_hook_sel));
+}
+
+void telemetrySetHookPatchedCount(int n) {
+    std::lock_guard<std::mutex> lock(g_hook_mutex);
+    g_hooks_patched = n;
 }

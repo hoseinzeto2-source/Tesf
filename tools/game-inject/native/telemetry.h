@@ -14,6 +14,8 @@ enum class DataSource : uint8_t {
     PhysicsExports = 1,
     HookShotOutcome = 2,
     HookGameStarted = 3,
+    HookNetworkReq = 4,
+    HookShotTaken = 5,
 };
 
 struct MatchSnapshot {
@@ -22,10 +24,12 @@ struct MatchSnapshot {
     int swap_frames = 0;
     int update_tick = 0;
     int hook_events = 0;
+    int hooks_patched = 0;
     bool egl_hooked = false;
     bool hooks_installed = false;
     int frames_since_lib = 0;
     DataSource data_source = DataSource::None;
+    char last_hook_sel[48] = {};
 
     GameExports exports;
     int body_count = 0;
@@ -35,6 +39,8 @@ struct MatchSnapshot {
     bool ball_valid = false;
     float score_home = -1.f;
     float score_away = -1.f;
+    float shot_angle = -1.f;
+    float shot_power = -1.f;
 };
 
 bool isGameLibLoaded();
@@ -42,5 +48,9 @@ void resetLiveScanState();
 GameExports readGameExportsCached();
 bool parseShotOutcomeObject(const void* obj, MatchSnapshot& out);
 bool parseGameStartedObject(const void* obj, MatchSnapshot& out);
-void commitHookSnapshot(const MatchSnapshot& snap);
+bool parseShotTakenObject(const void* obj, MatchSnapshot& out);
+bool parseNetworkRequest(const void* req, MatchSnapshot& out);
+void commitHookSnapshot(const MatchSnapshot& snap, const char* sel_name);
 void mergeHookSnapshot(MatchSnapshot& dst);
+int getHookPatchedCount();
+void telemetrySetHookPatchedCount(int n);

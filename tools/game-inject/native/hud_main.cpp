@@ -18,7 +18,6 @@
 
 #define LOG_TAG "SSMResearchHUD"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
-#define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
 
 static EGLBoolean (*real_eglSwapBuffers)(EGLDisplay, EGLSurface) = nullptr;
 
@@ -32,8 +31,7 @@ static std::mutex snap_mutex;
 static auto last_time = std::chrono::steady_clock::now();
 
 static float computeUiScale(int w, int h) {
-    const float short_edge = (float)std::min(w, h);
-    return std::clamp(short_edge / 480.f, 1.65f, 2.35f);
+    return std::clamp((float)std::min(w, h) / 480.f, 1.65f, 2.35f);
 }
 
 static void applyMobileStyle(float scale) {
@@ -42,8 +40,6 @@ static void applyMobileStyle(float scale) {
     style.FrameRounding = 5.f * scale;
     style.WindowPadding = ImVec2(14.f * scale, 12.f * scale);
     style.ItemSpacing = ImVec2(8.f * scale, 10.f * scale);
-    style.ItemInnerSpacing = ImVec2(6.f * scale, 5.f * scale);
-    style.ScrollbarSize = 18.f * scale;
     style.Alpha = 0.90f;
     style.ScaleAllSizes(scale);
 }
@@ -68,7 +64,6 @@ static void tryInitImGui(EGLDisplay dpy, EGLSurface surface) {
     if (w <= 0 || h <= 0) return;
 
     ui_scale = computeUiScale(w, h);
-
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     ImGuiIO& io = ImGui::GetIO();
@@ -77,19 +72,15 @@ static void tryInitImGui(EGLDisplay dpy, EGLSurface surface) {
     ImFontConfig font_cfg;
     font_cfg.SizePixels = std::clamp(18.f * ui_scale, 22.f, 32.f);
     io.Fonts->AddFontDefault(&font_cfg);
-    io.FontGlobalScale = 1.0f;
 
     ImGui::StyleColorsDark();
     applyMobileStyle(ui_scale);
 
     if (!ImGui_ImplOpenGL3_Init("#version 300 es")) {
-        LOGE("ImGui_ImplOpenGL3_Init failed");
         ImGui::DestroyContext();
         return;
     }
-
     imgui_ready = true;
-    LOGI("ImGui ready scale=%.2f %dx%d", ui_scale, w, h);
 }
 
 static void refreshSnapshot(int w, int h) {
@@ -125,9 +116,18 @@ static void updateDisplaySize(EGLDisplay dpy, EGLSurface surface) {
     refreshSnapshot(w, h);
 }
 
+static const char* dataSourceLabel(DataSource ds) {
+    switch (ds) {
+        case DataSource::HookShotOutcome: return "shot_outcome protobuf";
+        case DataSource::HookGameStarted: return "game_started protobuf";
+        case DataSource::HookNetworkReq: return "req.shot_outcome_data_";
+        case DataSource::HookShotTaken: return "shot_taken field_state";
+        default: return "waiting for match event";
+    }
+}
+
 static void drawResearchHud() {
-    const float pad = 10.f;
-    ImGui::SetNextWindowPos(ImVec2(pad, pad), ImGuiCond_Always);
+    ImGui::SetNextWindowPos(ImVec2(10.f, 10.f), ImGuiCond_Always);
     ImGui::SetNextWindowBgAlpha(0.88f);
 
     ImGui::Begin("SSM HUD", nullptr,
@@ -136,53 +136,47 @@ static void drawResearchHud() {
     std::lock_guard<std::mutex> lock(snap_mutex);
     const MatchSnapshot& s = cached_snap;
 
-    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.35f, 1.f, 0.55f, 1.f));
-    ImGui::TextUnformatted("READ-ONLY RESEARCH HUD");
-    ImGui::PopStyleColor();
+    ImGui::TextColored(ImVec4(0.35f, 1.f, 0.55f, 1.f), "LIVE MATCH (protobuf hooks)");
     ImGui::Separator();
 
-    ImGui::Text("tick: %d  frame: %d", s.update_tick, s.swap_frames);
+    ImGui::Text("tick %d  |  frame %d", s.update_tick, s.swap_frames);
     ImGui::Text("libgame: %s", s.exports.lib_loaded ? "loaded" : "waiting");
-    ImGui::Text("objc hooks: %s", s.hooks_installed ? "active" : "installing...");
-    ImGui::Text("hook events: %d", s.hook_events);
+    ImGui::Text("objc runtime: %s", s.hooks_installed ? "intercept ON" : "installing...");
+    ImGui::Text("IMP hooks: %d  |  events: %d", s.hooks_patched, s.hook_events);
+    if (s.last_hook_sel[0]) ImGui::Text("last: %s", s.last_hook_sel);
 
     ImGui::Separator();
-    ImGui::TextUnformatted("MATCH (hooked shot_outcome / game_started)");
-
-    if (s.data_source == DataSource::HookShotOutcome) {
-        ImGui::TextColored(ImVec4(0.4f, 1.f, 0.55f, 1.f), "Source: setShotOutcome hook");
-    } else if (s.data_source == DataSource::HookGameStarted) {
-        ImGui::TextColored(ImVec4(0.4f, 1.f, 0.55f, 1.f), "Source: game_started hook");
-    } else if (s.exports.lib_loaded) {
-        ImGui::TextColored(ImVec4(1.f, 0.75f, 0.35f, 1.f), "Waiting for server event...");
-    } else {
-        ImGui::TextColored(ImVec4(1.f, 0.6f, 0.4f, 1.f), "Enter a match");
-    }
+    ImGui::Text("Source: %s", dataSourceLabel(s.data_source));
 
     if (s.score_home >= 0.f && s.score_away >= 0.f)
         ImGui::Text("Score: %d : %d", (int)s.score_home, (int)s.score_away);
     else
-        ImGui::Text("Score: — (updates on shot_outcome)");
+        ImGui::Text("Score: — (updates on shot_outcome event)");
 
     if (s.ball_valid)
-        ImGui::Text("Ball X: %.4f  Y: %.4f", s.ball_x, s.ball_y);
+        ImGui::Text("Ball  X: %.4f  Y: %.4f", s.ball_x, s.ball_y);
     else
-        ImGui::Text("Ball: — (from field_state on event)");
+        ImGui::Text("Ball: — (from field_state)");
 
     if (s.body_count > 0) {
-        ImGui::Text("field_state bodies: %d", s.body_count);
+        ImGui::Text("field_state: %d bodies", s.body_count);
         ImGui::Text("pucks (excl. ball): %d", s.puck_estimate);
     }
 
-    ImGui::Separator();
-    ImGui::TextUnformatted("PHYSICS");
-    if (s.exports.lib_loaded) {
-        ImGui::Text("sInternalVelocity: %.4f", s.exports.internal_velocity);
-        ImGui::Text("debug: %d  diag: %d", s.exports.physics_debug, s.exports.physics_diag);
+    if (s.shot_angle >= 0.f || s.shot_power >= 0.f) {
+        ImGui::Text("Last shot: angle %.3f  power %.3f",
+                    s.shot_angle >= 0.f ? s.shot_angle : 0.f,
+                    s.shot_power >= 0.f ? s.shot_power : 0.f);
     }
 
     ImGui::Separator();
-    ImGui::TextWrapped("No heap scan — data from libgame objc hooks only.");
+    if (s.exports.lib_loaded) {
+        ImGui::Text("sInternalVelocity: %.4f", s.exports.internal_velocity);
+        ImGui::Text("physics debug: %d", s.exports.physics_debug);
+    }
+
+    ImGui::Separator();
+    ImGui::TextWrapped("Hooks: networkEventShotOutcome/GameStarted, setShotOutcome. req offsets +416/+608.");
 
     ImGui::End();
 }
@@ -204,8 +198,7 @@ static void renderImGuiFrame(EGLDisplay dpy, EGLSurface surface) {
 static EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface) {
     swap_frames++;
     renderImGuiFrame(dpy, surface);
-    if (!real_eglSwapBuffers) return EGL_FALSE;
-    return real_eglSwapBuffers(dpy, surface);
+    return real_eglSwapBuffers ? real_eglSwapBuffers(dpy, surface) : EGL_FALSE;
 }
 
 static void installEglHook() {
@@ -221,7 +214,7 @@ static void installEglHook() {
 extern "C" JNIEXPORT jint JNI_OnLoad(JavaVM* vm, void* reserved) {
     (void)vm;
     (void)reserved;
-    LOGI("ssm_research_hud: egl + libgame objc hooks");
+    LOGI("ssm_research_hud: deep libgame objc hooks");
     installEglHook();
     installGameHooks();
     return JNI_VERSION_1_6;
