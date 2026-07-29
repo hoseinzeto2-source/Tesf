@@ -46,6 +46,30 @@ frida -U com.miniclip.soccerstars -l frida/enable_physics_debug.js
 
 ## روش ۲ — Dump کتابخانه native
 
+### الف) از فایل `.apks` (بدون گوشی — پیشنهادی)
+
+فایل `so.apks` از لینک رسمی نسخه 36.14.4:
+
+```bash
+cd tools/physics-dump
+chmod +x scripts/*.sh
+
+# دانلود خودکار از dl.mr-cheat.ir/so.apks
+./scripts/extract_lib_from_apks.sh
+
+# یا با فایل محلی:
+./scripts/extract_lib_from_apks.sh /path/to/so.apks ./dumped
+
+# نماد‌ها و رشته‌های مهم:
+./scripts/dump_symbols.sh ./dumped/libgame-SSM.so ./dumped/symbols.txt
+```
+
+خروجی:
+- `dumped/libgame-SSM-GooglePlay-Gold-Release-Module-1013.so` (~41 MB)
+- `dumped/libgame-SSM.so` (symlink برای Ghidra/Frida)
+
+### ب) از گوشی روت (adb)
+
 ```bash
 chmod +x scripts/pull_lib.sh
 ./scripts/pull_lib.sh ./dumped

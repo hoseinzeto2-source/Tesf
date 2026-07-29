@@ -2,3 +2,7 @@ game-analysis/so.apks
 game-analysis/extracted/
 game-analysis/base/
 game-analysis/native/
+downloads/
+dumped/
+tools/physics-dump/dumped/
+*.so
