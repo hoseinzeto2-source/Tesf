@@ -20,6 +20,9 @@ static const char* kGameLib = "libgame-SSM-GooglePlay-Gold-Release-Module-1013.s
 static const char* kChoreographerSym =
     "Java_com_miniclip_windowmanager_NativeWindowRenderer_onChoreographer";
 
+static const int kTelemetryStartFrames = 90;   // ~1.5s menu — avoid heap scan during match start tap
+static const int kChoreographerDeferFrames = 120; // defer game-lib hook until menu is stable
+
 static EGLBoolean (*real_eglSwapBuffers)(EGLDisplay, EGLSurface) = nullptr;
 static void (*real_onChoreographer)(JNIEnv*, jclass, jlong) = nullptr;
 
@@ -139,7 +142,7 @@ static void renderImGuiFrame(EGLDisplay dpy, EGLSurface surface) {
     EGLint w = (EGLint)ImGui::GetIO().DisplaySize.x;
     EGLint h = (EGLint)ImGui::GetIO().DisplaySize.y;
 
-    if (choreo_frames % 10 == 0) refreshTelemetry(w, h);
+    if (swap_frames >= kTelemetryStartFrames && swap_frames % 10 == 0) refreshTelemetry(w, h);
 
     ImGui_ImplOpenGL3_NewFrame();
     ImGui::NewFrame();
@@ -205,13 +208,15 @@ static void installChoreographerHook() {
 }
 
 static void* delayedHookThread(void*) {
-    for (int i = 0; i < 120; i++) {
+    for (int i = 0; i < 180; i++) {
         installEglHook();
-        installChoreographerHook();
-        if (choreographer_hooked && egl_hooked) break;
+        if (swap_frames >= kChoreographerDeferFrames) {
+            installChoreographerHook();
+        }
+        if (egl_hooked && (choreographer_hooked || i >= 40)) break;
         usleep(500000);
     }
-    if (!choreographer_hooked) LOGE("choreographer hook never installed");
+    if (!choreographer_hooked) LOGI("choreographer hook skipped/deferred (egl HUD only)");
     if (!egl_hooked) LOGE("egl hook never installed");
     return nullptr;
 }
