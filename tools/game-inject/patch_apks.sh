@@ -99,7 +99,8 @@ fi
 
 sign_apk() {
   local apk="$1"
-  "$BT/zipalign" -f 4 "$apk" "$apk.aligned"
+  # -p page-aligns .so entries — required when android:extractNativeLibs="false"
+  "$BT/zipalign" -p -f 4 "$apk" "$apk.aligned"
   mv "$apk.aligned" "$apk"
   "$BT/apksigner" sign --ks "$KEYSTORE" --ks-pass "pass:$KS_PASS" \
     --key-pass "pass:$KS_PASS" --ks-key-alias "$KEY_ALIAS" "$apk"
