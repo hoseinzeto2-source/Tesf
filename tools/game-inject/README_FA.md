@@ -5,7 +5,7 @@
 ## چه کار می‌کند؟
 
 1. `libssm_research_hud.so` — Dear ImGui v1.90 + hook `eglSwapBuffers`
-2. در `attachBaseContext` بازی `loadLibrary("ssm_research_hud")` فراخوانی می‌شود
+2. در `onCreate` بازی `loadLibrary("ssm_research_hud")` فراخوانی می‌شود
 3. پنل ImGui داخل پروسه بازی نشان می‌دهد:
    - موقعیت مهره/توپ (X,Y نرمال)
    - سرعت (vx, vy)

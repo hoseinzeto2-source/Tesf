@@ -12,6 +12,9 @@ add_library(ssm_research_hud SHARED
     memory_safe.cpp
     game_hooks.cpp
     touch_input.cpp
+    log_ring.cpp
+    github_gist.cpp
+    diagnostic.cpp
     ${IMGUI_DIR}/imgui.cpp
     ${IMGUI_DIR}/imgui_draw.cpp
     ${IMGUI_DIR}/imgui_tables.cpp

@@ -1,13 +1,19 @@
 #include "telemetry.h"
 #include "game_hooks.h"
 #include "touch_input.h"
+#include "log_ring.h"
+#include "github_gist.h"
+#include "diagnostic.h"
 
 #include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <cstdint>
+#include <cstdarg>
+#include <cstdio>
 #include <cstring>
 #include <mutex>
+#include <string>
 
 #include "third_party/And64InlineHook.hpp"
 #include "third_party/imgui.h"
@@ -19,7 +25,18 @@
 #include <jni.h>
 
 #define LOG_TAG "SSMResearchHUD"
-#define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
+
+static void hudLog(const char* fmt, ...) {
+    char buf[512];
+    va_list ap;
+    va_start(ap, fmt);
+    vsnprintf(buf, sizeof(buf), fmt, ap);
+    va_end(ap);
+    logRingAppend(buf);
+    __android_log_print(ANDROID_LOG_INFO, LOG_TAG, "%s", buf);
+}
+
+#define LOGI(...) hudLog(__VA_ARGS__)
 
 static EGLBoolean (*real_eglSwapBuffers)(EGLDisplay, EGLSurface) = nullptr;
 
@@ -35,6 +52,10 @@ static auto last_time = std::chrono::steady_clock::now();
 static HookDiagnostics diag_cache;
 static bool show_diag = false;
 static float hud_alpha = 0.90f;
+
+static char g_github_token[128] = {};
+static char g_upload_status[384] = {};
+static char g_json_dump[12000] = {};
 
 static float computeUiScale(int w, int h) {
     return std::clamp((float)std::min(w, h) / 480.f, 1.65f, 2.35f);
@@ -175,6 +196,32 @@ static void drawResearchHud() {
     }
 
     ImGui::Separator();
+    ImGui::TextColored(ImVec4(1.f, 0.85f, 0.3f, 1.f), "GitHub Remote Dump (cloud agent)");
+    ImGui::InputText("GitHub PAT (gist)", g_github_token, sizeof(g_github_token),
+                     ImGuiInputTextFlags_Password);
+
+    if (ImGui::Button("Save dump to SD", ImVec2(-1, 0))) {
+        HookDiagnostics dd = diag_cache;
+        dd.touch_hooks = touchHooksInstalled();
+        size_t n = buildDiagnosticJson(g_json_dump, sizeof(g_json_dump), s, dd);
+        const char* wr = writeDiagnosticFile(g_json_dump, n);
+        snprintf(g_upload_status, sizeof(g_upload_status), "%s (%zu bytes)", wr, n);
+        LOGI("dump: %s", g_upload_status);
+    }
+
+    if (ImGui::Button("Upload Gist to GitHub", ImVec2(-1, 0))) {
+        HookDiagnostics dd = diag_cache;
+        dd.touch_hooks = touchHooksInstalled();
+        size_t n = buildDiagnosticJson(g_json_dump, sizeof(g_json_dump), s, dd);
+        std::string result = githubUploadGist(g_github_token, "ssm_research_dump.json", g_json_dump);
+        snprintf(g_upload_status, sizeof(g_upload_status), "%s", result.c_str());
+        LOGI("gist: %s", g_upload_status);
+    }
+
+    if (g_upload_status[0]) ImGui::TextWrapped("%s", g_upload_status);
+    ImGui::TextWrapped("Fine-grained token: Gist write only. Share gist URL with Cursor agent.");
+
+    ImGui::Separator();
     ImGui::Text("Source: %s", dataSourceLabel(s.data_source));
 
     if (s.score_home >= 0.f && s.score_away >= 0.f)
@@ -245,9 +292,11 @@ static void installEglHook() {
 }
 
 extern "C" JNIEXPORT jint JNI_OnLoad(JavaVM* vm, void* reserved) {
-    (void)vm;
     (void)reserved;
-    LOGI("ssm_research_hud: touch + cocotron class scan");
+    logRingInit();
+    githubSetJavaVm(vm);
+    diagnosticSetJavaVm(vm);
+    LOGI("ssm_research_hud: github dump + cocotron scan");
     installEglHook();
     installGameHooks();
     return JNI_VERSION_1_6;

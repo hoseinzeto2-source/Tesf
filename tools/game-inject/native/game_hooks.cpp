@@ -1,5 +1,6 @@
 #include "game_hooks.h"
 
+#include "log_ring.h"
 #include "telemetry.h"
 #include "memory_safe.h"
 #include "third_party/And64InlineHook.hpp"
@@ -8,6 +9,8 @@
 #include <dlfcn.h>
 #include <pthread.h>
 #include <chrono>
+#include <cstdarg>
+#include <cstdio>
 #include <thread>
 #include <cstring>
 #include <mutex>
@@ -15,7 +18,18 @@
 #include <vector>
 
 #define LOG_TAG "SSMResearchHUD"
-#define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
+
+static void logMsg(const char* fmt, ...) {
+    char buf[512];
+    va_list ap;
+    va_start(ap, fmt);
+    vsnprintf(buf, sizeof(buf), fmt, ap);
+    va_end(ap);
+    logRingAppend(buf);
+    __android_log_print(ANDROID_LOG_INFO, LOG_TAG, "%s", buf);
+}
+
+#define LOGI(...) logMsg(__VA_ARGS__)
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
 
 static const char* kGameLib = "libgame-SSM-GooglePlay-Gold-Release-Module-1013.so";
@@ -47,7 +61,7 @@ static ClassNameEntryFn class_name_entry_fn = nullptr;
 static ObjcExecClassFn real_objc_execClass = nullptr;
 
 static bool g_hooks_installed = false;
-static std::mutex g_wrap_mutex;
+static std::recursive_mutex g_wrap_mutex;
 static std::unordered_set<void*> g_wrapped_source_imps;
 static std::unordered_set<void*> g_wrapped_methods;
 static thread_local bool g_in_hook_dispatch = false;
@@ -80,6 +94,15 @@ static bool isWatchSelector(const char* name) {
     for (int i = 0; kExact[i]; i++) {
         if (strcmp(name, kExact[i]) == 0) return true;
     }
+
+    static const char* kSub[] = {
+        "shotOutcome", "ShotOutcome", "networkEvent", "GameStarted", "AnimateShot",
+        "SessionState", "shotTaken", "ShotTaken", "fieldState", "FieldState",
+        nullptr,
+    };
+    for (int i = 0; kSub[i]; i++) {
+        if (strstr(name, kSub[i]) != nullptr) return true;
+    }
     return false;
 }
 
@@ -108,6 +131,10 @@ static uintptr_t gameLibBase() {
     Dl_info info{};
     if (!dladdr(sym, &info) || !info.dli_fbase) return 0;
     return (uintptr_t)info.dli_fbase;
+}
+
+uintptr_t getGameLibBase() {
+    return gameLibBase();
 }
 
 static void dispatchHook(void* sel, void* arg) {
@@ -200,7 +227,7 @@ static bool isOurHookImp(void* imp) {
 static void* wrapImpIfNeeded(void* imp, const char* sel_name) {
     if (!imp || isImpInOurLib(imp) || isOurHookImp(imp)) return imp;
 
-    std::lock_guard<std::mutex> lock(g_wrap_mutex);
+    std::lock_guard<std::recursive_mutex> lock(g_wrap_mutex);
     if (g_wrapped_source_imps.count(imp)) {
         for (int i = 0; i < g_slot_count; i++) {
             if ((void*)g_slots[i].real == imp) return hook_slot_ptrs[i];
@@ -220,6 +247,25 @@ static void* wrapImpIfNeeded(void* imp, const char* sel_name) {
     return hook_slot_ptrs[slot];
 }
 
+static void patchImpSlot(void* method, void* imp, const char* name) {
+    if (!method || !imp) return;
+    void* wrapped = wrapImpIfNeeded(imp, name);
+    if (wrapped == imp) return;
+
+    if (real_method_setImplementation) {
+        real_method_setImplementation(method, wrapped);
+        LOGI("hook: wrapped %s", name);
+        return;
+    }
+
+    // Cocotron: IMP at method+0x10 (inline struct) or method is pointer to struct with imp at +16
+    void* imp_slot = reinterpret_cast<uint8_t*>(method) + 0x10;
+    if (isWritable(imp_slot, sizeof(void*))) {
+        safeWrite(imp_slot, &wrapped, sizeof(void*));
+        LOGI("hook: direct imp %s", name);
+    }
+}
+
 static void wrapSingleMethod(void* method, bool count_only = false) {
     if (!method || !method_getName_fn || !sel_getName_fn) return;
 
@@ -231,9 +277,9 @@ static void wrapSingleMethod(void* method, bool count_only = false) {
 
     if (count_only) return;
 
-    if (!real_method_getImplementation || !real_method_setImplementation) return;
+    if (!real_method_getImplementation) return;
 
-    std::lock_guard<std::mutex> lock(g_wrap_mutex);
+    std::lock_guard<std::recursive_mutex> lock(g_wrap_mutex);
     if (g_wrapped_methods.count(method)) return;
 
     void* imp = real_method_getImplementation(method);
@@ -242,21 +288,49 @@ static void wrapSingleMethod(void* method, bool count_only = false) {
         return;
     }
 
-    void* wrapped = wrapImpIfNeeded(imp, name);
-    if (wrapped != imp) {
-        real_method_setImplementation(method, wrapped);
-        LOGI("hook: wrapped %s", name);
-    }
+    patchImpSlot(method, imp, name);
     g_wrapped_methods.insert(method);
 }
 
-static void wrapMethodList(const uint8_t* list, int count) {
+static void wrapMethodListPtr(const uint8_t* list, int count) {
     if (!list || count <= 0) return;
     for (int i = 0; i < count && i < 800; i++) {
         void* method = nullptr;
         if (!safeRead(list + i * 8, &method, sizeof(void*))) continue;
         if (!method || !isValidArg(method)) continue;
         wrapSingleMethod(method);
+    }
+}
+
+static void wrapMethodListInline(const uint8_t* list, int count) {
+    if (!list || count <= 0) return;
+    constexpr int kStride = 24;
+    for (int i = 0; i < count && i < 400; i++) {
+        const uint8_t* ent = list + i * kStride;
+        if (!isReadable(ent, kStride)) continue;
+
+        void* sel = nullptr;
+        void* imp = nullptr;
+        if (!safeRead(ent, &sel, sizeof(void*))) continue;
+        if (!safeRead(ent + 16, &imp, sizeof(void*))) continue;
+        if (!sel || !sel_getName_fn || !imp) continue;
+
+        const char* name = sel_getName_fn(sel);
+        if (!isWatchSelector(name)) continue;
+
+        g_watch_methods_found++;
+
+        if (!real_method_getImplementation) continue;
+
+        std::lock_guard<std::recursive_mutex> lock(g_wrap_mutex);
+        void* method = const_cast<uint8_t*>(ent);
+        if (g_wrapped_methods.count(method)) continue;
+        if (isOurHookImp(imp)) {
+            g_wrapped_methods.insert(method);
+            continue;
+        }
+        patchImpSlot(method, imp, name);
+        g_wrapped_methods.insert(method);
     }
 }
 
@@ -273,8 +347,12 @@ static void wrapWatchMethodsInClass(void* cls) {
     if (!safeRead(reinterpret_cast<uint8_t*>(class_d) + 0x12, &meta_count, sizeof(uint16_t))) return;
 
     const auto* inst_list = reinterpret_cast<const uint8_t*>(class_d) + 0x18;
-    wrapMethodList(inst_list, inst_count);
-    wrapMethodList(inst_list + inst_count * 8, meta_count);
+    wrapMethodListPtr(inst_list, inst_count);
+    wrapMethodListPtr(inst_list + inst_count * 8, meta_count);
+
+  // Also try inline objc_method array (sel/types/imp stride 24)
+    wrapMethodListInline(inst_list, inst_count);
+    wrapMethodListInline(inst_list + inst_count * 24, meta_count);
 }
 
 static void hook_objc_execClass(void* cls) {
@@ -354,7 +432,7 @@ static void* hook_method_setImplementation(void* method, void* imp) {
         const char* name = sel_getName_fn(sel);
         if (isWatchSelector(name)) {
             imp = wrapImpIfNeeded(imp, name);
-            std::lock_guard<std::mutex> lock(g_wrap_mutex);
+            std::lock_guard<std::recursive_mutex> lock(g_wrap_mutex);
             g_wrapped_methods.insert(method);
         }
     }
@@ -374,6 +452,8 @@ static bool installLibgameHooks() {
     if (!lib) return false;
 
     if (real_method_setImplementation) return true;
+
+    refreshWritableMaps();
 
     auto set_sym = (void*)dlsym(lib, "method_setImplementation");
     auto get_sym = (void*)dlsym(lib, "method_getImplementation");
@@ -456,6 +536,70 @@ void forceRescanHooks() {
     scanAllRegisteredClasses();
     LOGI("forceRescan: classes=%d hooks=%d watch=%d", g_classes_scanned, g_slot_count,
          g_watch_methods_found);
+}
+
+static void appendMethodName(char* out, size_t cap, const char* name) {
+    if (!out || cap == 0 || !name) return;
+    size_t len = strlen(out);
+    if (len > 0 && len < cap - 1) {
+        strncat(out, ";", cap - len - 1);
+        len = strlen(out);
+    }
+    if (len < cap - 1) strncat(out, name, cap - len - 1);
+}
+
+static void dumpClassMethodsLayout(void* cls, char* out, size_t cap, bool ptr_layout) {
+    if (!out || cap == 0) return;
+    out[0] = '\0';
+    if (!cls || !isReadable(cls, 32)) {
+        strncpy(out, "cls invalid", cap - 1);
+        return;
+    }
+
+    void* class_d = nullptr;
+    if (!safeRead(reinterpret_cast<uint8_t*>(cls) + 0x18, &class_d, sizeof(void*)) || !class_d) {
+        strncpy(out, "class_d missing", cap - 1);
+        return;
+    }
+
+    uint16_t inst_count = 0;
+    safeRead(reinterpret_cast<uint8_t*>(class_d) + 0x10, &inst_count, sizeof(uint16_t));
+    const auto* inst_list = reinterpret_cast<const uint8_t*>(class_d) + 0x18;
+
+    if (ptr_layout) {
+        for (int i = 0; i < inst_count && i < 120; i++) {
+            void* method = nullptr;
+            if (!safeRead(inst_list + i * 8, &method, sizeof(void*)) || !method) continue;
+            if (!method_getName_fn || !sel_getName_fn) continue;
+            void* sel = method_getName_fn(method);
+            const char* name = sel ? sel_getName_fn(sel) : nullptr;
+            if (name) appendMethodName(out, cap, name);
+        }
+    } else {
+        for (int i = 0; i < inst_count && i < 80; i++) {
+            const uint8_t* ent = inst_list + i * 24;
+            if (!isReadable(ent, 24)) continue;
+            void* sel = nullptr;
+            if (!safeRead(ent, &sel, sizeof(void*)) || !sel || !sel_getName_fn) continue;
+            const char* name = sel_getName_fn(sel);
+            if (name) appendMethodName(out, cap, name);
+        }
+    }
+}
+
+void exportMenuManagerMethods(char* out, size_t cap, bool pointer_array_layout) {
+    if (!out || cap == 0) return;
+    out[0] = '\0';
+    if (!lookup_class_fn) {
+        strncpy(out, "lookup not ready", cap - 1);
+        return;
+    }
+    void* menu = lookup_class_fn("MenuManager");
+    if (!menu) {
+        strncpy(out, "MenuManager missing", cap - 1);
+        return;
+    }
+    dumpClassMethodsLayout(menu, out, cap, pointer_array_layout);
 }
 
 void runHookDiagnostics(HookDiagnostics& out) {

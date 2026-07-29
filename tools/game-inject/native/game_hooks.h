@@ -21,3 +21,5 @@ int gameClassesScanned();
 int gameWatchMethodsFound();
 void forceRescanHooks();
 void runHookDiagnostics(HookDiagnostics& out);
+uintptr_t getGameLibBase();
+void exportMenuManagerMethods(char* out, size_t cap, bool pointer_array_layout);
