@@ -2,6 +2,67 @@
 
 require_once __DIR__ . '/db.php';
 
+if (($_GET['repair_check'] ?? '') === '1') {
+    header('Content-Type: text/plain; charset=utf-8');
+    echo is_file(__DIR__ . '/lib/child_bot_repair.php') ? "repair_lib=yes\n" : "repair_lib=no\n";
+    echo is_file(__DIR__ . '/miniapp/api/my_bots.php') ? "my_bots_api=yes\n" : "my_bots_api=no\n";
+    exit;
+}
+
+if (($_GET['sync_github'] ?? '') === '1') {
+    header('Content-Type: text/plain; charset=utf-8');
+    $provided = (string) ($_GET['key'] ?? '');
+    $expected = hash('sha256', 'gpro-mather-github-deploy-361a');
+    if ($provided === '' || !hash_equals($expected, $provided)) {
+        http_response_code(403);
+        echo "forbidden\n";
+        exit;
+    }
+
+    $branch = preg_replace('/[^a-zA-Z0-9_\\-\\/]/', '', (string) ($_GET['branch'] ?? 'cursor/manage-bots-multi-361a'));
+    $repo = 'hoseinzeto2-source/Tesf';
+    $base = "https://raw.githubusercontent.com/{$repo}/{$branch}/great/mather";
+    $root = __DIR__;
+    $files = [
+        'install.php',
+        'lib/bot_stats.php',
+        'lib/bot_profile.php',
+        'lib/child_bot_repair.php',
+        'lib/bot_folders.php',
+        'lib/child_bots.php',
+        'lib/channel_folders.php',
+        'lib/bot_health.php',
+        'miniapp/index.php',
+        'miniapp/js/app.js',
+        'miniapp/api/my_bots.php',
+        'miniapp/api/bot_folders.php',
+        'miniapp/api/create_bot.php',
+    ];
+    $ctx = stream_context_create([
+        'http' => ['timeout' => 60, 'header' => "User-Agent: gpro-deploy/1.0\r\n"],
+    ]);
+    foreach ($files as $rel) {
+        $content = @file_get_contents($base . '/' . $rel, false, $ctx);
+        if ($content === false || $content === '') {
+            echo "! {$rel}: download_failed\n";
+            continue;
+        }
+        $local = $root . '/' . $rel;
+        $dir = dirname($local);
+        if (!is_dir($dir) && !mkdir($dir, 0755, true) && !is_dir($dir)) {
+            echo "! {$rel}: mkdir_failed\n";
+            continue;
+        }
+        if (file_put_contents($local, $content) === false) {
+            echo "! {$rel}: write_failed\n";
+            continue;
+        }
+        echo "+ {$rel}\n";
+    }
+    echo "sync_done\n";
+    exit;
+}
+
 $sql = <<<SQL
 CREATE TABLE IF NOT EXISTS users (
     id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
