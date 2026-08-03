@@ -9311,32 +9311,39 @@
     };
     if (auth) renderProfile(auth);
 
-    const coreResults = await Promise.allSettled([
-      api("channels.php"),
-      api("my_bots.php"),
-    ]);
-
-    if (coreResults[0].status === "fulfilled") {
-      state.cache.channels = coreResults[0].value;
-      renderChannels(coreResults[0].value);
-    } else {
-      renderChannels({ channels: [], total: 0, totals: {} });
-      console.warn("channels load failed", coreResults[0].reason);
-      showToast("بارگذاری کانال‌ها ناموفق بود", { type: "error" });
-    }
-
-    if (coreResults[1].status === "fulfilled") {
-      state.cache.bots = coreResults[1].value;
+    try {
+      const botsData = await api("my_bots.php");
+      state.cache.bots = botsData;
       state.openBotFolderId = null;
-      renderBots(coreResults[1].value);
-    } else {
+      renderBots(botsData);
+      renderHomeQuickStats();
+    } catch (error) {
       state.openBotFolderId = null;
       renderBots({ bots: [], total: 0, folders: [] });
-      console.warn("bots load failed", coreResults[1].reason);
+      console.warn("bots load failed", error);
       showToast("بارگذاری ربات‌ها ناموفق بود", { type: "error", duration: 5000 });
     }
 
-    renderHomeQuickStats();
+    try {
+      const channelsData = await api("channels.php?lite=1");
+      state.cache.channels = channelsData;
+      renderChannels(channelsData);
+      renderHomeQuickStats();
+    } catch (error) {
+      renderChannels({ channels: [], total: 0, totals: {}, dashboard: { channels: [] } });
+      console.warn("channels load failed", error);
+      showToast("بارگذاری کانال‌ها ناموفق بود", { type: "error" });
+    }
+
+    void api("channels.php")
+      .then((fullChannels) => {
+        state.cache.channels = fullChannels;
+        renderChannels(fullChannels);
+        renderHomeQuickStats();
+      })
+      .catch((error) => {
+        console.warn("channels full stats failed", error);
+      });
 
     const results = await Promise.allSettled([
       api("server.php"),

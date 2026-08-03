@@ -9,6 +9,21 @@ if (($_GET['repair_check'] ?? '') === '1') {
     exit;
 }
 
+if (($_GET['schema_bootstrap'] ?? '') === '1') {
+    header('Content-Type: application/json; charset=utf-8');
+    $provided = (string) ($_GET['key'] ?? '');
+    $expected = hash('sha256', 'gpro-mather-github-deploy-361a');
+    if ($provided === '' || !hash_equals($expected, $provided)) {
+        http_response_code(403);
+        echo json_encode(['ok' => false, 'error' => 'forbidden'], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
+    require_once __DIR__ . '/lib/schema_bootstrap.php';
+    echo json_encode(runSchemaMigrations(), JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
 if (($_GET['repair_only'] ?? '') === '1') {
     header('Content-Type: text/plain; charset=utf-8');
     $provided = (string) ($_GET['key'] ?? '');
@@ -135,6 +150,7 @@ if (($_GET['sync_github'] ?? '') === '1') {
         'install.php',
         'lib/bot_stats.php',
         'lib/bot_profile.php',
+        'lib/schema_bootstrap.php',
         'lib/child_bot_repair.php',
         'lib/bot_folders.php',
         'lib/child_bots.php',
@@ -185,6 +201,11 @@ if (($_GET['sync_github'] ?? '') === '1') {
         echo "+ {$rel}\n";
     }
     echo "sync_done\n";
+
+    if (!empty($_GET['run_schema'])) {
+        require_once $root . '/lib/schema_bootstrap.php';
+        echo json_encode(runSchemaMigrations(), JSON_UNESCAPED_UNICODE) . "\n";
+    }
 
     if (!empty($_GET['run_repair'])) {
         require_once $root . '/lib/child_bots.php';

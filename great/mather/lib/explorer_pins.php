@@ -1,6 +1,7 @@
 <?php
 
 require_once dirname(__DIR__) . '/db.php';
+require_once __DIR__ . '/schema_bootstrap.php';
 
 /**
  * @var list<string>
@@ -30,6 +31,12 @@ function ensureExplorerPinColumns(string $table): void
 
     if (!in_array($table, explorerPinTables(), true)) {
         throw new InvalidArgumentException('invalid_table');
+    }
+
+    if (schemaMigrationsComplete()) {
+        $done[$table] = true;
+
+        return;
     }
 
     $db = getDb();

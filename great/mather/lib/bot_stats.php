@@ -1,6 +1,7 @@
 <?php
 
 require_once dirname(__DIR__) . '/db.php';
+require_once __DIR__ . '/schema_bootstrap.php';
 
 function ensureBotStatsTables(): void
 {
@@ -22,6 +23,22 @@ CREATE TABLE IF NOT EXISTS uploader_users (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
 SQL
     );
+    ensureUploaderUsersCreatedAtColumn();
+}
+
+function ensureUploaderUsersCreatedAtColumn(): void
+{
+    if (schemaMigrationsComplete()) {
+        return;
+    }
+
+    $db = getDb();
+    $result = $db->query("SHOW COLUMNS FROM uploader_users LIKE 'created_at'");
+    if ($result && $result->num_rows === 0) {
+        $db->query(
+            'ALTER TABLE uploader_users ADD COLUMN created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP AFTER last_name'
+        );
+    }
 }
 
 function countUploaderUsersForBot(int $childBotId): int

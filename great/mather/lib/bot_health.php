@@ -1,11 +1,16 @@
 <?php
 
 require_once dirname(__DIR__) . '/db.php';
+require_once __DIR__ . '/schema_bootstrap.php';
 require_once __DIR__ . '/telegram_api.php';
 require_once __DIR__ . '/child_bots.php';
 
 function ensureChildBotHealthColumns(): void
 {
+    if (schemaMigrationsComplete()) {
+        return;
+    }
+
     ensureChildBotTables();
     $db = getDb();
     $columns = [

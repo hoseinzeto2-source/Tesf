@@ -44,44 +44,46 @@ if ($action === 'folder_members') {
     }
 }
 
+$lite = !empty($_GET['lite']);
+
 try {
-    reconcileAllContentGroupPlacements(80);
+    if (!empty($_GET['reconcile'])) {
+        reconcileAllContentGroupPlacements(80);
+    }
     if (!empty($_GET['deep_health'])) {
         runServerChannelHealthPass(3);
     }
-    $channels = getActiveBotChannels(false, true, true);
-    if (count($channels) === 0) {
+
+    $channels = getActiveBotChannels(false, false, true);
+    if (count($channels) === 0 && !$lite) {
         resyncKnownBotChannels();
-        $channels = getActiveBotChannels(false, true, true);
+        $channels = getActiveBotChannels(false, false, true);
     }
 
     $folders = [];
     $overview = null;
 
-    try {
-        require_once dirname(__DIR__, 2) . '/lib/channel_stats.php';
-        $overview = attachChannelRecentJoinStats($channels);
-        $overview['channels'] = attachFolderIdsToChannels($overview['channels']);
-        $overview['channels'] = array_values(array_filter(
-            $overview['channels'],
+    $filterChannels = static function (array $list): array {
+        return array_values(array_filter(
+            $list,
             static fn(array $item): bool => in_array($item['type'] ?? '', ['channel', 'group', 'supergroup'], true)
         ));
-        $folders = getChannelFolders();
-    } catch (Throwable $statsError) {
-        error_log('channels overview failed: ' . $statsError->getMessage());
-        $overview = null;
-    }
+    };
 
-    if ($overview === null) {
+    if ($lite) {
+        $filtered = $filterChannels(attachFolderIdsToChannels($channels));
         $memberTotal = 0;
-        foreach ($channels as $channel) {
+        foreach ($filtered as $channel) {
             $memberTotal += (int) ($channel['member_count'] ?? 0);
         }
+        try {
+            $folders = getChannelFolders();
+        } catch (Throwable $folderError) {
+            error_log('channel folders failed: ' . $folderError->getMessage());
+            $folders = [];
+        }
         $overview = [
-            'channels' => array_values(array_filter(
-                attachFolderIdsToChannels($channels),
-                static fn(array $item): bool => in_array($item['type'] ?? '', ['channel', 'group', 'supergroup'], true)
-            )),
+            'channels' => $filtered,
             'totals' => [
                 'member_count' => $memberTotal,
                 'joins_1h' => 0,
@@ -93,11 +95,41 @@ try {
             'members_hourly' => [],
             'members_range' => null,
         ];
+    } else {
         try {
+            require_once dirname(__DIR__, 2) . '/lib/channel_stats.php';
+            $overview = attachChannelRecentJoinStats($channels);
+            $overview['channels'] = $filterChannels(attachFolderIdsToChannels($overview['channels']));
             $folders = getChannelFolders();
-        } catch (Throwable $folderError) {
-            error_log('channel folders failed: ' . $folderError->getMessage());
-            $folders = [];
+        } catch (Throwable $statsError) {
+            error_log('channels overview failed: ' . $statsError->getMessage());
+            $overview = null;
+        }
+
+        if ($overview === null) {
+            $memberTotal = 0;
+            foreach ($channels as $channel) {
+                $memberTotal += (int) ($channel['member_count'] ?? 0);
+            }
+            $overview = [
+                'channels' => $filterChannels(attachFolderIdsToChannels($channels)),
+                'totals' => [
+                    'member_count' => $memberTotal,
+                    'joins_1h' => 0,
+                    'joins_12h' => 0,
+                    'joins_24h' => 0,
+                ],
+                'joins_hourly' => [],
+                'joins_range' => null,
+                'members_hourly' => [],
+                'members_range' => null,
+            ];
+            try {
+                $folders = getChannelFolders();
+            } catch (Throwable $folderError) {
+                error_log('channel folders failed: ' . $folderError->getMessage());
+                $folders = [];
+            }
         }
     }
 
@@ -108,6 +140,7 @@ try {
 
     jsonResponse([
         'ok' => true,
+        'lite' => $lite,
         'total' => count($overview['channels']),
         'channels' => $overview['channels'],
         'folders' => $folders,

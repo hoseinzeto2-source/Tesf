@@ -1,6 +1,7 @@
 <?php
 
 require_once dirname(__DIR__) . '/db.php';
+require_once __DIR__ . '/schema_bootstrap.php';
 require_once __DIR__ . '/explorer_pins.php';
 
 function ensureBotFolderTables(): void
@@ -37,6 +38,10 @@ SQL
 
 function ensureBotFolderParentColumn(): void
 {
+    if (schemaMigrationsComplete()) {
+        return;
+    }
+
     $db = getDb();
     $result = $db->query("SHOW COLUMNS FROM bot_folders LIKE 'parent_id'");
     if ($result && $result->num_rows === 0) {

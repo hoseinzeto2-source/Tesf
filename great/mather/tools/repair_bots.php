@@ -156,9 +156,27 @@ try {
         if (!empty($_GET['simulate'])) {
             $ownerId = (int) ($_GET['owner_id'] ?? 8806407819);
             if ($ownerId > 0) {
+                $steps = [];
+                $t0 = microtime(true);
                 require_once dirname(__DIR__) . '/lib/child_bots.php';
+                $steps['require_child_bots_ms'] = (int) round((microtime(true) - $t0) * 1000);
+
+                $t1 = microtime(true);
+                $rawBots = getChildBotsByOwner($ownerId);
+                $steps['getChildBotsByOwner_ms'] = (int) round((microtime(true) - $t1) * 1000);
+
+                $t2 = microtime(true);
                 require_once dirname(__DIR__) . '/lib/bot_folders.php';
-                $bots = attachFolderIdsToBots(getChildBotsByOwner($ownerId), $ownerId);
+                $steps['require_bot_folders_ms'] = (int) round((microtime(true) - $t2) * 1000);
+
+                $t3 = microtime(true);
+                $bots = attachFolderIdsToBots($rawBots, $ownerId);
+                $steps['attachFolderIdsToBots_ms'] = (int) round((microtime(true) - $t3) * 1000);
+
+                $t4 = microtime(true);
+                $out['simulate_folders'] = getBotFolders($ownerId);
+                $steps['getBotFolders_ms'] = (int) round((microtime(true) - $t4) * 1000);
+
                 foreach ($bots as $bot) {
                     $out['simulate_my_bots'][] = [
                         'id' => (int) ($bot['id'] ?? 0),
@@ -166,7 +184,7 @@ try {
                         'folder_id' => $bot['folder_id'] ?? null,
                     ];
                 }
-                $out['simulate_folders'] = getBotFolders($ownerId);
+                $out['simulate_timing'] = $steps;
             }
         }
         echo json_encode($out, JSON_UNESCAPED_UNICODE);

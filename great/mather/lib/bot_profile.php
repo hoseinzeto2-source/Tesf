@@ -6,6 +6,10 @@ require_once __DIR__ . '/telegram_api.php';
 
 function ensureChildBotProfilePhotoColumn(): void
 {
+    if (schemaMigrationsComplete()) {
+        return;
+    }
+
     ensureChildBotTables();
     $db = getDb();
     $result = $db->query("SHOW COLUMNS FROM child_bots LIKE 'profile_photo_file_id'");

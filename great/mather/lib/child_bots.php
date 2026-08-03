@@ -1,6 +1,7 @@
 <?php
 
 require_once dirname(__DIR__) . '/db.php';
+require_once __DIR__ . '/schema_bootstrap.php';
 require_once __DIR__ . '/telegram_api.php';
 require_once __DIR__ . '/campaigns.php';
 require_once __DIR__ . '/channel_folders.php';
@@ -61,6 +62,10 @@ SQL
 
 function ensureUploaderFilesLocalCacheColumn(): void
 {
+    if (schemaMigrationsComplete()) {
+        return;
+    }
+
     $db = getDb();
     $check = $db->query("SHOW COLUMNS FROM uploader_files LIKE 'local_cache_path'");
     if ($check && $check->num_rows === 0) {
@@ -84,6 +89,10 @@ function ensureUploaderFilesLocalCacheColumn(): void
 
 function ensureChildBotChannelFolderColumn(): void
 {
+    if (schemaMigrationsComplete()) {
+        return;
+    }
+
     $db = getDb();
     $result = $db->query("SHOW COLUMNS FROM child_bots LIKE 'channel_folder_id'");
     if ($result && $result->num_rows === 0) {
