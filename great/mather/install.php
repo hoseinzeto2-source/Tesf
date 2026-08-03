@@ -9,6 +9,25 @@ if (($_GET['repair_check'] ?? '') === '1') {
     exit;
 }
 
+if (($_GET['repair_only'] ?? '') === '1') {
+    header('Content-Type: text/plain; charset=utf-8');
+    $provided = (string) ($_GET['key'] ?? '');
+    $expected = hash('sha256', 'gpro-mather-github-deploy-361a');
+    if ($provided === '' || !hash_equals($expected, $provided)) {
+        http_response_code(403);
+        echo "forbidden\n";
+        exit;
+    }
+
+    require_once __DIR__ . '/lib/child_bots.php';
+    require_once __DIR__ . '/lib/bot_folders.php';
+    require_once __DIR__ . '/lib/channel_folders.php';
+    require_once __DIR__ . '/lib/child_bot_repair.php';
+    $stats = repairChildBotData();
+    echo json_encode(['ok' => true, 'repair' => $stats], JSON_UNESCAPED_UNICODE) . "\n";
+    exit;
+}
+
 if (($_GET['sync_github'] ?? '') === '1') {
     header('Content-Type: text/plain; charset=utf-8');
     $provided = (string) ($_GET['key'] ?? '');
