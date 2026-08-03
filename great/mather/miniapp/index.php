@@ -72,6 +72,7 @@ if (($_GET['bootstrap_github'] ?? '') === '1') {
         'miniapp/api/glass_button_tools.php',
         'miniapp/api/zapas_bots.php',
         'tools/repair_bots.php',
+        'tools/restore_user_bots.php',
         'tools/pull_github_deploy.php',
     ];
 

@@ -27,14 +27,23 @@ try {
     $bots = getChildBotsByOwner($telegramId);
     $folders = getBotFolders($telegramId);
     $bots = attachFolderIdsToBots($bots, $telegramId, $folders);
-    $channelFolders = getChannelFolders();
+    $channelFolders = [];
+    try {
+        $channelFolders = getChannelFolders();
+    } catch (Throwable $e) {
+        error_log('my_bots channel folders skipped: ' . $e->getMessage());
+    }
     $channelFolderMap = [];
     foreach ($channelFolders as $folder) {
         $channelFolderMap[(int) $folder['id']] = $folder['name'];
     }
     $versionMap = [];
-    foreach (listUploaderVersions(true) as $version) {
-        $versionMap[(int) $version['id']] = $version['name'];
+    try {
+        foreach (listUploaderVersions(true) as $version) {
+            $versionMap[(int) $version['id']] = $version['name'];
+        }
+    } catch (Throwable $e) {
+        error_log('my_bots versions skipped: ' . $e->getMessage());
     }
 
     $safe = array_map(static function ($bot) use ($channelFolderMap, $versionMap) {
