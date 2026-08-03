@@ -37,7 +37,6 @@ SQL
     ensureChildBotProfilePhotoColumn();
     require_once __DIR__ . '/explorer_pins.php';
     ensureExplorerPinColumns('child_bots');
-    ensureUploaderFilesLocalCacheColumn();
     $db->query(
         <<<SQL
 CREATE TABLE IF NOT EXISTS uploader_files (
@@ -57,6 +56,7 @@ CREATE TABLE IF NOT EXISTS uploader_files (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
 SQL
     );
+    ensureUploaderFilesLocalCacheColumn();
 }
 
 function ensureUploaderFilesLocalCacheColumn(): void
