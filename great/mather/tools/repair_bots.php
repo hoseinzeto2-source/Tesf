@@ -16,18 +16,82 @@ require_once dirname(__DIR__) . '/db.php';
 
 header('Content-Type: application/json; charset=utf-8');
 
-$stats = [
-    'orphan_items_removed' => 0,
-    'cross_owner_items_removed' => 0,
-    'admin_bots_transferred' => 0,
-    'bots_folder_assigned' => 0,
-    'primary_owner' => null,
-    'test_folder_id' => null,
-];
+function normFolderName(string $name): string
+{
+    $name = mb_strtolower(trim($name), 'UTF-8');
+
+    return preg_replace('/\s+/u', '', $name) ?? $name;
+}
+
+/**
+ * @param list<array<string, mixed>> $folders
+ */
+function findTestFolderId(array $folders): int
+{
+    $rootId = 0;
+    foreach ($folders as $folder) {
+        $parentId = $folder['parent_id'] ?? null;
+        if ($parentId !== null && (int) $parentId > 0) {
+            continue;
+        }
+        $name = normFolderName((string) ($folder['name'] ?? ''));
+        if (str_contains($name, 'غیر') && str_contains($name, 'اخلاق')) {
+            $rootId = (int) $folder['id'];
+            break;
+        }
+    }
+
+    if ($rootId <= 0) {
+        return 0;
+    }
+
+    foreach ($folders as $folder) {
+        if ((int) ($folder['parent_id'] ?? 0) !== $rootId) {
+            continue;
+        }
+        $name = normFolderName((string) ($folder['name'] ?? ''));
+        if ($name === 'تست' || str_contains($name, 'تست')) {
+            return (int) $folder['id'];
+        }
+    }
+
+    return 0;
+}
 
 try {
     $db = getDb();
     $adminIds = array_values(array_unique(array_map('intval', $admin_telegram_ids ?? [])));
+
+    if (!empty($_GET['diag'])) {
+        $out = ['ok' => true, 'admin_ids' => $adminIds, 'users' => [], 'child_bots' => [], 'bot_folders' => [], 'bot_folder_items' => []];
+        $r = $db->query('SELECT telegram_id, username, first_name, last_seen_at FROM users ORDER BY last_seen_at DESC LIMIT 20');
+        while ($row = $r->fetch_assoc()) {
+            $out['users'][] = $row;
+        }
+        $r = $db->query('SELECT id, owner_telegram_id, bot_username, bot_type, status FROM child_bots ORDER BY id');
+        while ($row = $r->fetch_assoc()) {
+            $out['child_bots'][] = $row;
+        }
+        $r = $db->query('SELECT id, owner_telegram_id, name, parent_id FROM bot_folders ORDER BY owner_telegram_id, id');
+        while ($row = $r->fetch_assoc()) {
+            $out['bot_folders'][] = $row;
+        }
+        $r = $db->query('SELECT bot_id, folder_id FROM bot_folder_items ORDER BY bot_id');
+        while ($row = $r->fetch_assoc()) {
+            $out['bot_folder_items'][] = $row;
+        }
+        echo json_encode($out, JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
+    $stats = [
+        'orphan_items_removed' => 0,
+        'cross_owner_items_removed' => 0,
+        'admin_bots_transferred' => 0,
+        'bots_folder_assigned' => 0,
+        'primary_owner' => null,
+        'test_folder_id' => null,
+    ];
 
     $db->query('DELETE i FROM bot_folder_items i LEFT JOIN child_bots b ON b.id = i.bot_id WHERE b.id IS NULL');
     $stats['orphan_items_removed'] = (int) $db->affected_rows;
@@ -40,16 +104,42 @@ try {
     );
     $stats['cross_owner_items_removed'] = (int) $db->affected_rows;
 
-    $primaryOwner = 0;
-    if ($adminIds !== []) {
-        $adminList = implode(',', $adminIds);
-        $result = $db->query(
-            "SELECT telegram_id FROM users WHERE is_bot = 0 AND telegram_id NOT IN ({$adminList}) ORDER BY last_seen_at DESC, id DESC LIMIT 1"
-        );
-        if ($result && ($row = $result->fetch_assoc())) {
-            $primaryOwner = (int) ($row['telegram_id'] ?? 0);
+    $forcedOwner = isset($_GET['owner_id']) ? (int) $_GET['owner_id'] : 0;
+    $primaryOwner = $forcedOwner;
+
+    if ($primaryOwner <= 0) {
+        if ($adminIds !== []) {
+            $adminList = implode(',', $adminIds);
+            $result = $db->query(
+                "SELECT telegram_id FROM users WHERE is_bot = 0 AND telegram_id NOT IN ({$adminList}) ORDER BY last_seen_at DESC, id DESC LIMIT 1"
+            );
+            if ($result && ($row = $result->fetch_assoc())) {
+                $primaryOwner = (int) ($row['telegram_id'] ?? 0);
+            }
+        } else {
+            $result = $db->query('SELECT telegram_id FROM users WHERE is_bot = 0 ORDER BY last_seen_at DESC, id DESC LIMIT 1');
+            if ($result && ($row = $result->fetch_assoc())) {
+                $primaryOwner = (int) ($row['telegram_id'] ?? 0);
+            }
         }
-    } else {
+    }
+
+    if ($primaryOwner <= 0) {
+        $result = $db->query('SELECT DISTINCT owner_telegram_id FROM bot_folders ORDER BY owner_telegram_id');
+        while ($result && ($row = $result->fetch_assoc())) {
+            $candidate = (int) ($row['owner_telegram_id'] ?? 0);
+            if ($candidate <= 0) {
+                continue;
+            }
+            if ($adminIds !== [] && in_array($candidate, $adminIds, true)) {
+                continue;
+            }
+            $primaryOwner = $candidate;
+            break;
+        }
+    }
+
+    if ($primaryOwner <= 0) {
         $result = $db->query('SELECT telegram_id FROM users WHERE is_bot = 0 ORDER BY last_seen_at DESC, id DESC LIMIT 1');
         if ($result && ($row = $result->fetch_assoc())) {
             $primaryOwner = (int) ($row['telegram_id'] ?? 0);
@@ -66,39 +156,12 @@ try {
 
     $testFolderId = 0;
     if ($primaryOwner > 0) {
-        $stmt = $db->prepare(
-            'SELECT id, name, parent_id FROM bot_folders WHERE owner_telegram_id = ?'
-        );
+        $stmt = $db->prepare('SELECT id, name, parent_id FROM bot_folders WHERE owner_telegram_id = ?');
         $stmt->bind_param('i', $primaryOwner);
         $stmt->execute();
         $folders = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
         $stmt->close();
-
-        $rootId = 0;
-        foreach ($folders as $folder) {
-            $parentId = $folder['parent_id'] ?? null;
-            if ($parentId !== null && (int) $parentId > 0) {
-                continue;
-            }
-            $name = mb_strtolower(preg_replace('/\s+/u', '', (string) ($folder['name'] ?? '')), 'UTF-8');
-            if (str_contains($name, 'غیر') && str_contains($name, 'اخلاق')) {
-                $rootId = (int) $folder['id'];
-                break;
-            }
-        }
-
-        if ($rootId > 0) {
-            foreach ($folders as $folder) {
-                if ((int) ($folder['parent_id'] ?? 0) !== $rootId) {
-                    continue;
-                }
-                $name = mb_strtolower(preg_replace('/\s+/u', '', (string) ($folder['name'] ?? '')), 'UTF-8');
-                if ($name === 'تست' || str_contains($name, 'تست')) {
-                    $testFolderId = (int) $folder['id'];
-                    break;
-                }
-            }
-        }
+        $testFolderId = findTestFolderId($folders);
     }
 
     $stats['test_folder_id'] = $testFolderId > 0 ? $testFolderId : null;
@@ -126,10 +189,18 @@ try {
             }
             $insert->close();
         }
+
+        $db->query(
+            "UPDATE bot_folder_items i
+             INNER JOIN child_bots c ON c.id = i.bot_id
+             SET i.folder_id = {$testFolderId}
+             WHERE c.owner_telegram_id = {$primaryOwner}"
+        );
+        $stats['bots_folder_assigned'] += (int) $db->affected_rows;
     }
 
     echo json_encode(['ok' => true, 'repair' => $stats], JSON_UNESCAPED_UNICODE);
 } catch (Throwable $e) {
     http_response_code(500);
-    echo json_encode(['ok' => false, 'error' => $e->getMessage(), 'repair' => $stats], JSON_UNESCAPED_UNICODE);
+    echo json_encode(['ok' => false, 'error' => $e->getMessage()], JSON_UNESCAPED_UNICODE);
 }
