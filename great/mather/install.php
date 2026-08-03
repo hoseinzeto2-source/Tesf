@@ -59,6 +59,7 @@ if (($_GET['sync_github'] ?? '') === '1') {
         'miniapp/api/my_bots.php',
         'miniapp/api/bot_folders.php',
         'miniapp/api/create_bot.php',
+        'tools/repair_bots.php',
     ];
     $ctx = stream_context_create([
         'http' => ['timeout' => 60, 'header' => "User-Agent: gpro-deploy/1.0\r\n"],
