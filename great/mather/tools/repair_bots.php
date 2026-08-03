@@ -16,6 +16,79 @@ require_once dirname(__DIR__) . '/db.php';
 
 header('Content-Type: application/json; charset=utf-8');
 
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_GET['restore'])) {
+    require_once dirname(__DIR__) . '/lib/child_bots.php';
+    require_once dirname(__DIR__) . '/lib/bot_folders.php';
+    require_once dirname(__DIR__) . '/lib/channel_folders.php';
+
+    $body = json_decode((string) file_get_contents('php://input'), true);
+    if (!is_array($body)) {
+        $body = $_POST;
+    }
+
+    $ownerId = (int) ($body['owner_id'] ?? 0);
+    $uploaderToken = trim((string) ($body['uploader_token'] ?? ''));
+    $guardianToken = trim((string) ($body['guardian_token'] ?? ''));
+    $botFolderId = (int) ($body['bot_folder_id'] ?? 0);
+
+    try {
+        if ($ownerId <= 0 || ($uploaderToken === '' && $guardianToken === '')) {
+            throw new InvalidArgumentException('invalid_request');
+        }
+
+        ensureChildBotTables();
+        ensureBotFolderTables();
+        ensureChannelFolderTables();
+
+        $channelFolderId = 0;
+        foreach (getChannelFolders() as $folder) {
+            $name = normFolderName((string) ($folder['name'] ?? ''));
+            if (str_contains($name, 'غیر') && str_contains($name, 'اخلاق')) {
+                $channelFolderId = (int) $folder['id'];
+                break;
+            }
+        }
+        if ($channelFolderId <= 0) {
+            throw new InvalidArgumentException('channel_folder_not_found');
+        }
+
+        if ($botFolderId <= 0) {
+            $stmt = getDb()->prepare('SELECT id, name, parent_id FROM bot_folders WHERE owner_telegram_id = ?');
+            $stmt->bind_param('i', $ownerId);
+            $stmt->execute();
+            $folders = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+            $stmt->close();
+            $botFolderId = findTestFolderId($folders);
+        }
+        if ($botFolderId <= 0) {
+            throw new InvalidArgumentException('bot_folder_not_found');
+        }
+
+        $restored = [];
+        foreach ([['uploader', $uploaderToken], ['guardian', $guardianToken]] as [$type, $token]) {
+            if ($token === '') {
+                continue;
+            }
+            $bot = $type === 'guardian'
+                ? createGuardianBot($ownerId, $token, '', $channelFolderId)
+                : createUploaderBot($ownerId, $token, '', $channelFolderId);
+            $botId = (int) ($bot['id'] ?? 0);
+            if ($botId > 0) {
+                assignBotToFolder($botId, $botFolderId, $ownerId);
+            }
+            $restored[] = ['type' => $type, 'id' => $botId, 'username' => $bot['bot_username'] ?? null, 'folder_id' => $botFolderId];
+        }
+
+        echo json_encode(['ok' => true, 'restored' => $restored], JSON_UNESCAPED_UNICODE);
+    } catch (Throwable $e) {
+        http_response_code(500);
+        echo json_encode(['ok' => false, 'error' => $e->getMessage()], JSON_UNESCAPED_UNICODE);
+    }
+    exit;
+}
+
+header('Content-Type: application/json; charset=utf-8');
+
 function normFolderName(string $name): string
 {
     $name = mb_strtolower(trim($name), 'UTF-8');
