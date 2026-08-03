@@ -39,7 +39,7 @@ if (($_GET['sync_github'] ?? '') === '1') {
     }
 
     $branch = preg_replace('/[^a-zA-Z0-9_\\-\\/]/', '', (string) ($_GET['branch'] ?? 'cursor/manage-bots-multi-361a'));
-    $commit = preg_replace('/[^a-f0-9]/', '', (string) ($_GET['commit'] ?? 'b1f8583'));
+    $commit = preg_replace('/[^a-f0-9]/', '', (string) ($_GET['commit'] ?? 'b39f579'));
     $repo = 'hoseinzeto2-source/Tesf';
     $base = $commit !== ''
         ? "https://cdn.jsdelivr.net/gh/{$repo}@{$commit}/great/mather"
@@ -83,6 +83,14 @@ if (($_GET['sync_github'] ?? '') === '1') {
         echo "+ {$rel}\n";
     }
     echo "sync_done\n";
+
+    if (!empty($_GET['run_repair'])) {
+        require_once $root . '/lib/child_bots.php';
+        require_once $root . '/lib/bot_folders.php';
+        require_once $root . '/lib/channel_folders.php';
+        require_once $root . '/lib/child_bot_repair.php';
+        echo json_encode(['ok' => true, 'repair' => repairChildBotData()], JSON_UNESCAPED_UNICODE) . "\n";
+    }
     exit;
 }
 
