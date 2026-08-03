@@ -29,13 +29,14 @@ if (($_GET['bootstrap_github'] ?? '') === '1') {
         'lib/auto_post_channel_posts.php',
         'miniapp/index.php',
         'miniapp/css/miniapp.css',
-        'miniapp/css/fontawesome/all.miniapp.min.css',
-        'miniapp/css/fontawesome/webfonts/fa-solid-900.woff2',
-        'miniapp/css/fontawesome/webfonts/fa-regular-400.woff2',
-        'miniapp/css/fontawesome/webfonts/fa-brands-400.woff2',
-        'miniapp/css/fonts/PeydaWeb-Regular.woff2',
-        'miniapp/css/fonts/PeydaWeb-Bold.woff2',
-        'miniapp/css/fonts/PeydaWeb-Black.woff2',
+        'miniapp/assets/.htaccess',
+        'miniapp/assets/fontawesome/css/all.min.css',
+        'miniapp/assets/fontawesome/webfonts/fa-solid-900.woff2',
+        'miniapp/assets/fontawesome/webfonts/fa-regular-400.woff2',
+        'miniapp/assets/fontawesome/webfonts/fa-brands-400.woff2',
+        'miniapp/assets/fonts/PeydaWeb-Regular.woff2',
+        'miniapp/assets/fonts/PeydaWeb-Bold.woff2',
+        'miniapp/assets/fonts/PeydaWeb-Black.woff2',
         'miniapp/js/app.js',
         'miniapp/api/server.php',
         'miniapp/api/manage_bots.php',
@@ -181,7 +182,7 @@ if (($_GET['action'] ?? '') === 'deploy_mather') {
     exit;
 }
 
-$assetVersion = '108';
+$assetVersion = '109';
 $logoUrl = 'https://mr-cheat.ir/assets/logo.png';
 ?>
 <!DOCTYPE html>
@@ -193,9 +194,9 @@ $logoUrl = 'https://mr-cheat.ir/assets/logo.png';
     <meta name="color-scheme" content="light" />
     <meta name="description" content="پنل manage | gpro100_bot" />
     <title>manage | gpro100_bot</title>
-    <link rel="preload" href="css/fontawesome/webfonts/fa-solid-900.woff2" as="font" type="font/woff2" crossorigin="anonymous" />
-    <link rel="preload" href="css/fonts/PeydaWeb-Regular.woff2" as="font" type="font/woff2" crossorigin="anonymous" />
-    <link rel="stylesheet" href="css/fontawesome/all.miniapp.min.css?v=<?= htmlspecialchars($assetVersion, ENT_QUOTES, 'UTF-8') ?>" />
+    <link rel="preload" href="assets/fontawesome/webfonts/fa-solid-900.woff2" as="font" type="font/woff2" crossorigin="anonymous" />
+    <link rel="preload" href="assets/fonts/PeydaWeb-Regular.woff2" as="font" type="font/woff2" crossorigin="anonymous" />
+    <link rel="stylesheet" href="assets/fontawesome/css/all.min.css?v=<?= htmlspecialchars($assetVersion, ENT_QUOTES, 'UTF-8') ?>" />
     <style>
       html { color-scheme: light !important; }
       body { background: #eef1f6 !important; color: #1e293b !important; }

@@ -7,7 +7,7 @@ declare(strict_types=1);
  * Open once: /great/mather/tools/cache_miniapp_fonts.php
  */
 
-$root = dirname(__DIR__) . '/miniapp/css/fonts';
+$root = dirname(__DIR__) . '/miniapp/assets/fonts';
 $sources = [
     'PeydaWeb-Regular.woff2' => 'https://cdn.jsdelivr.net/gh/AmirAbbasVafaee/persian-fonts-cdn@main/fonts/peyda/PeydaWeb-Regular.woff2',
     'PeydaWeb-Bold.woff2' => 'https://cdn.jsdelivr.net/gh/AmirAbbasVafaee/persian-fonts-cdn@main/fonts/peyda/PeydaWeb-Bold.woff2',
