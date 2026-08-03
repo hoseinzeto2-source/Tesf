@@ -7367,9 +7367,25 @@
       try {
         const result = await api("create_bot.php", {
           method: "POST",
-          body: { token, type, channel_folder_id: channelFolderId },
+          body: {
+            token,
+            type,
+            channel_folder_id: channelFolderId,
+            bot_folder_id: state.openBotFolderId || undefined,
+          },
         });
         closeAddBotModal();
+        if (result?.bot?.id && state.openBotFolderId) {
+          try {
+            await botFolderApi({
+              action: "assign",
+              bot_id: Number(result.bot.id),
+              folder_id: Number(state.openBotFolderId),
+            });
+          } catch (assignErr) {
+            console.warn("bot folder assign failed", assignErr);
+          }
+        }
         await reloadBots();
         showToast(result.message || "ربات اضافه شد", { type: "success" });
         tg?.HapticFeedback?.notificationOccurred("success");

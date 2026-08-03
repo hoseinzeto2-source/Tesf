@@ -137,7 +137,13 @@ function setManageBotWebhook(string $token, string $webhookUrl): bool
         'drop_pending_updates' => false,
     ]);
 
-    return !empty($response['ok']);
+    if (!empty($response['ok'])) {
+        return true;
+    }
+
+    $description = (string) ($response['description'] ?? '');
+
+    return stripos($description, 'already') !== false;
 }
 
 function seedPrimaryManageBotFromConfig(): void

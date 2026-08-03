@@ -2,6 +2,7 @@
 
 require_once dirname(__DIR__, 2) . '/config.php';
 require_once dirname(__DIR__, 2) . '/lib/child_bots.php';
+require_once dirname(__DIR__, 2) . '/lib/bot_folders.php';
 require_once dirname(__DIR__) . '/lib/telegram_webapp.php';
 
 $user = requireTelegramUser();
@@ -16,6 +17,7 @@ $token = trim($body['token'] ?? '');
 $name = trim($body['name'] ?? '');
 $type = trim((string) ($body['type'] ?? 'uploader'));
 $channelFolderId = (int) ($body['channel_folder_id'] ?? 0);
+$botFolderId = isset($body['bot_folder_id']) ? (int) $body['bot_folder_id'] : 0;
 $uploaderVersionId = (int) ($body['uploader_version_id'] ?? 0);
 
 if (!in_array($type, ['uploader', 'guardian'], true)) {
@@ -34,6 +36,12 @@ try {
     $bot = $type === 'guardian'
         ? createGuardianBot($telegramId, $token, $name, $channelFolderId, $uploaderVersionId)
         : createUploaderBot($telegramId, $token, $name, $channelFolderId, $uploaderVersionId);
+
+    $botId = (int) ($bot['id'] ?? 0);
+    if ($botId > 0 && $botFolderId > 0) {
+        assignBotToFolder($botId, $botFolderId, $telegramId);
+        $bot['folder_id'] = $botFolderId;
+    }
 
     require_once dirname(__DIR__, 2) . '/lib/uploader_versions.php';
     $version = getUploaderVersionById((int) ($bot['uploader_version_id'] ?? 0));

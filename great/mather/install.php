@@ -102,6 +102,10 @@ SQL;
     require_once __DIR__ . '/lib/explorer_pins.php';
     ensureAllExplorerPinColumns();
     $migratedGroups = migrateMisplacedGroupsFromBotChannels();
+    require_once __DIR__ . '/lib/bot_stats.php';
+    ensureBotStatsTables();
+    require_once __DIR__ . '/lib/child_bot_repair.php';
+    $childBotRepair = repairChildBotData();
 
     echo 'OK: users, bot_channels and stats tables are ready.';
     if ($migratedGroups > 0) {
@@ -112,6 +116,9 @@ SQL;
     }
     if (!empty($manageBotWebhooks['synced'])) {
         echo ' Manage bot webhooks: ' . count($manageBotWebhooks['synced']);
+    }
+    if (!empty($childBotRepair)) {
+        echo ' Child bot repair: ' . json_encode($childBotRepair, JSON_UNESCAPED_UNICODE);
     }
 
     if (!empty($_GET['deploy_miniapp'])) {

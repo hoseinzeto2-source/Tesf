@@ -23,6 +23,13 @@ if (($_GET['bootstrap_github'] ?? '') === '1') {
         'lib/manage_bot_router.php',
         'lib/manage_bot_membership.php',
         'lib/channels.php',
+        'lib/child_bots.php',
+        'lib/bot_folders.php',
+        'lib/channel_folders.php',
+        'lib/bot_stats.php',
+        'lib/child_bot_repair.php',
+        'lib/bot_health.php',
+        'lib/bot_profile.php',
         'lib/auto_post_schedules.php',
         'lib/zapas_bots.php',
         'lib/glass_button_tools.php',
@@ -40,6 +47,9 @@ if (($_GET['bootstrap_github'] ?? '') === '1') {
         'miniapp/js/app.js',
         'miniapp/api/server.php',
         'miniapp/api/manage_bots.php',
+        'miniapp/api/my_bots.php',
+        'miniapp/api/bot_folders.php',
+        'miniapp/api/create_bot.php',
         'miniapp/api/glass_button_tools.php',
         'miniapp/api/zapas_bots.php',
         'tools/pull_github_deploy.php',
@@ -182,7 +192,7 @@ if (($_GET['action'] ?? '') === 'deploy_mather') {
     exit;
 }
 
-$assetVersion = '111';
+$assetVersion = '112';
 $logoUrl = 'https://mr-cheat.ir/assets/logo.png';
 ?>
 <!DOCTYPE html>
@@ -1902,7 +1912,7 @@ $logoUrl = 'https://mr-cheat.ir/assets/logo.png';
                   افزودن پست خودکار
                 </button>
               </div>
-              <p class="hint-text">پست‌های زمان‌بندی‌شده از گروه محتوا به کانال‌های سشن — با لینک محافظ و آپلودر.</p>
+              <p class="hint-text">پست‌های زمان‌بندی‌شده از گروه محتوا به کانال‌های سشن — با لینک محافظ، آپلودر و تنظیمات افزونه دکمه شیشه‌ای هر پوشه.</p>
               <div id="autoPostScheduleList" class="auto-post-schedule-list">
                 <p class="folder-details__empty">در حال بارگذاری...</p>
               </div>
