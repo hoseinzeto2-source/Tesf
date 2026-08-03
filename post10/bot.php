@@ -5,7 +5,29 @@ ini_set('display_startup_errors', 0);
 ini_set('log_errors', 1);
 error_reporting(E_ALL);
 
-date_default_timezone_set('Africa/Cairo');
+date_default_timezone_set('Asia/Tehran');
+
+// زمان فعلی تهران
+function now_tehran() {
+    return new DateTime('now', new DateTimeZone('Asia/Tehran'));
+}
+
+function tehran_date() {
+    return now_tehran()->format('Y-m-d');
+}
+
+function tehran_hm() {
+    return now_tehran()->format('H:i');
+}
+
+function tehran_datetime_minute() {
+    return now_tehran()->format('Y-m-d H:i:00');
+}
+
+// تبدیل زمان ذخیره‌شده (قاهره) به تهران برای نمایش پست‌های یک‌بار
+function storage_to_tehran_datetime($datetime) {
+    return cairo_to_tehran($datetime);
+}
 
 // لاگ برای دیباگ - غیرفعال شده برای کاهش حجم فایل
 function log_message($message) {
@@ -203,11 +225,22 @@ function init_tables_if_needed(PDO $pdo) {
             id BIGINT(20) NOT NULL AUTO_INCREMENT PRIMARY KEY,
             daily_post_id BIGINT(20) NOT NULL,
             channel_id VARCHAR(128) NOT NULL,
+            sent_date DATE NOT NULL,
             tg_message_id BIGINT(20) DEFAULT NULL,
             status ENUM('sent','failed','deleted') NOT NULL DEFAULT 'sent',
             attempt_count INT NOT NULL DEFAULT 1,
             last_error TEXT DEFAULT NULL,
-            sent_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+            sent_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE KEY uniq_daily_channel_date (daily_post_id, channel_id, sent_date)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+
+        'post_sends' => "CREATE TABLE IF NOT EXISTS post_sends (
+            id BIGINT(20) NOT NULL AUTO_INCREMENT PRIMARY KEY,
+            post_id BIGINT(20) NOT NULL,
+            channel_id VARCHAR(128) NOT NULL,
+            status ENUM('sent','failed') NOT NULL DEFAULT 'sent',
+            sent_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE KEY uniq_post_channel (post_id, channel_id)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
     ];
 
@@ -220,7 +253,19 @@ function init_tables_if_needed(PDO $pdo) {
         }
     }
 
-    // Add generated column and unique index for minute-level uniqueness (idempotent attempts)
+    // Add sent_date column for daily sends (idempotent)
+    try {
+        $pdo->exec("ALTER TABLE daily_post_sends ADD COLUMN sent_date DATE NOT NULL DEFAULT (CURDATE()) AFTER channel_id");
+    } catch (Exception $e) {
+        // likely already exists
+    }
+    try {
+        $pdo->exec("ALTER TABLE daily_post_sends ADD UNIQUE KEY uniq_daily_channel_date (daily_post_id, channel_id, sent_date)");
+    } catch (Exception $e) {
+        // likely already exists
+    }
+
+    // Legacy indexes (idempotent attempts)
     try {
         $pdo->exec("ALTER TABLE daily_post_sends ADD COLUMN sent_minute DATETIME GENERATED ALWAYS AS (FROM_UNIXTIME(UNIX_TIMESTAMP(sent_at) - MOD(UNIX_TIMESTAMP(sent_at), 60))) STORED");
         log_message("[init] Added sent_minute generated column to daily_post_sends");
@@ -351,8 +396,13 @@ function cleanup_duplicate_sends(PDO $pdo, $dailyPostId, $channelId) {
         $canDelete = false;
     }
     try {
-        $q = $pdo->prepare("\n            SELECT id, tg_message_id, status, sent_at\n            FROM daily_post_sends\n            WHERE daily_post_id = ? AND channel_id = ? AND DATE(sent_at) = DATE(NOW())\n            ORDER BY sent_at ASC\n        ");
-        $q->execute([$dailyPostId, $channelId]);
+        $q = $pdo->prepare("
+            SELECT id, tg_message_id, status, sent_at
+            FROM daily_post_sends
+            WHERE daily_post_id = ? AND channel_id = ? AND sent_date = ?
+            ORDER BY sent_at ASC
+        ");
+        $q->execute([$dailyPostId, $channelId, tehran_date()]);
         $rows = $q->fetchAll(PDO::FETCH_ASSOC);
     } catch (Exception $e) {
         log_message("cleanup_duplicate_sends: query failed: " . $e->getMessage());
@@ -435,10 +485,8 @@ function set_step($telegram_id, $step = null) {
 // تابع برای ارسال پست‌های آماده و روزانه
 function send_scheduled_posts() {
     global $pdo;
-    // Hardening: ensure tables exist (handles early calls on webhook paths)
     init_tables_if_needed($pdo);
 
-    // Reconnect if MySQL connection timed out between webhook calls
     try {
         $pdo->query("SELECT 1");
     } catch (PDOException $e) {
@@ -449,12 +497,6 @@ function send_scheduled_posts() {
         init_tables_if_needed($pdo);
     }
 
-    $current_time = date('Y-m-d H:i:00'); // زمان قاهره
-    $past_time = date('Y-m-d H:i:00', strtotime('-2 minutes')); // بازه دو دقیقه‌ای (قاهره)
-    $current_time_only = date('H:i:00'); // زمان فعلی (فقط ساعت و دقیقه، قاهره)
-    $current_date = date('Y-m-d'); // تاریخ فعلی (قاهره)
-
-    // Optional: Global lock to prevent overlapping runs
     $lockName = 'send_scheduled_posts_lock';
     try {
         $gotLock = (bool)$pdo->query("SELECT GET_LOCK('$lockName', 5)")->fetchColumn();
@@ -466,26 +508,54 @@ function send_scheduled_posts() {
         return;
     }
 
-    // ارسال پست‌های عادی - بررسی پست‌هایی که زمانشان رسیده یا گذشته
-    $stmt = $pdo->prepare("SELECT * FROM posts WHERE time <= ? AND status IN ('active', 'hidden') ORDER BY time ASC");
-    $stmt->execute([$current_time]);
-    $posts = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    log_message("Checking posts for time: $current_time (Cairo), found " . count($posts) . " posts");
+    // زمان فعلی تهران و معادل قاهره‌ای برای پست‌های یک‌بار
+    $tehranNowMinute = tehran_datetime_minute();
+    $cairoNowMinute = tehran_to_cairo($tehranNowMinute);
+    $cairoGraceStart = tehran_to_cairo(
+        (new DateTime($tehranNowMinute, new DateTimeZone('Asia/Tehran')))
+            ->modify('-2 minutes')
+            ->format('Y-m-d H:i:00')
+    );
+    $tehranToday = tehran_date();
+    $tehranHm = tehran_hm();
 
-    // ارسال پست‌های روزانه - بررسی پست‌هایی که زمانشان رسیده بر اساس زمان تهران
-    // زمان اکنون تهران → تبدیل به قاهره برای تطبیق با زمان ذخیره شده
-    $nowTehran = new DateTime('now', new DateTimeZone('Asia/Tehran'));
-    $nowTehranStr = $nowTehran->format('Y-m-d H:i:00');
-    $nowCairoFromTehran = tehran_to_cairo($nowTehranStr); // رشته زمان در قاهره
-    $current_hour_minute = substr($nowCairoFromTehran, 11, 5); // HH:MM
-    $stmt = $pdo->prepare("SELECT * FROM daily_posts WHERE time LIKE ?");
-    $stmt->execute([$current_hour_minute . '%']);
+    // پست‌های یک‌بار: دقیقه جاری + مهلت ۲ دقیقه + retry کانال‌های failed تا ۱۵ دقیقه
+    $stmt = $pdo->prepare(
+        "SELECT p.* FROM posts p
+         WHERE p.status IN ('active', 'hidden')
+         AND (
+           (p.time <= ? AND p.time >= ?)
+           OR (
+             p.id IN (SELECT post_id FROM post_sends WHERE status = 'failed')
+             AND p.time <= ?
+             AND TIMESTAMPDIFF(MINUTE, p.time, ?) BETWEEN 0 AND 15
+           )
+         )
+         ORDER BY p.time ASC"
+    );
+    $stmt->execute([$cairoNowMinute, $cairoGraceStart, $cairoNowMinute, $cairoNowMinute]);
+    $posts = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    log_message("Checking one-time posts: cairo=$cairoNowMinute, found " . count($posts));
+
+    // پست‌های روزانه: دقیقه فعلی تهران + retry کانال‌های failed تا ۱۵ دقیقه بعد
+    $stmt = $pdo->prepare(
+        "SELECT dp.* FROM daily_posts dp
+         WHERE TIME_FORMAT(dp.time, '%H:%i') = ?
+         OR (
+           dp.id IN (SELECT daily_post_id FROM daily_post_sends WHERE sent_date = ? AND status = 'failed')
+           AND TIME_TO_SEC(TIME(?)) >= TIME_TO_SEC(dp.time)
+           AND TIME_TO_SEC(TIME(?)) - TIME_TO_SEC(dp.time) <= 900
+         )"
+    );
+    $stmt->execute([$tehranHm, $tehranToday, $tehranHm . ':00', $tehranHm . ':00']);
     $daily_posts = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    log_message("Checking daily posts for time: $current_hour_minute (Cairo), found " . count($daily_posts) . " daily posts");
+    log_message("Checking daily posts for Tehran time: $tehranHm, found " . count($daily_posts));
 
     $stmt = $pdo->query("SELECT channels FROM options WHERE id = 1");
     $channels = json_decode($stmt->fetchColumn() ?: '[]', true);
-    log_message("Channels: " . json_encode($channels));
+    if (!is_array($channels)) {
+        $channels = [];
+    }
 
     if (empty($channels)) {
         log_message("No channels found, skipping post sending");
@@ -493,142 +563,150 @@ function send_scheduled_posts() {
         return;
     }
 
-    // پردازش پست‌های عادی
+    // --- پست‌های یک‌بار ---
     foreach ($posts as $post) {
-        $success = true;
+        $postId = $post['id'];
         $sent_count = 0;
         $total_channels = count($channels);
-        
-        log_message("Processing post {$post['id']} (type: {$post['type']}, status: {$post['status']}, time: {$post['time']})");
-        
+
         foreach ($channels as $channel) {
-            $response = $post['type'] == 'forward' ?
-                telegram_api('forwardMessage', [
+            $channel = (string)$channel;
+
+            // اگر قبلاً به این کانال ارسال شده، رد شود
+            $chk = $pdo->prepare("SELECT status FROM post_sends WHERE post_id = ? AND channel_id = ? AND status = 'sent'");
+            $chk->execute([$postId, $channel]);
+            if ($chk->fetchColumn() === 'sent') {
+                $sent_count++;
+                continue;
+            }
+
+            $response = $post['type'] == 'forward'
+                ? telegram_api('forwardMessage', [
                     'chat_id' => $channel,
                     'from_chat_id' => $post['from_chat_id'],
                     'message_id' => $post['message_id']
-                ]) :
-                telegram_api('copyMessage', [
+                ])
+                : telegram_api('copyMessage', [
                     'chat_id' => $channel,
                     'from_chat_id' => $post['from_chat_id'],
                     'message_id' => $post['message_id']
                 ]);
+
             if ($response === false) {
-                $success = false;
-                log_message("Failed to send post {$post['id']} to channel $channel");
+                try {
+                    $ins = $pdo->prepare("INSERT INTO post_sends (post_id, channel_id, status) VALUES (?, ?, 'failed') ON DUPLICATE KEY UPDATE status = 'failed', sent_at = CURRENT_TIMESTAMP");
+                    $ins->execute([$postId, $channel]);
+                } catch (Exception $e) { }
+                log_message("Failed to send post {$postId} to channel $channel");
             } else {
+                try {
+                    $ins = $pdo->prepare("INSERT INTO post_sends (post_id, channel_id, status) VALUES (?, ?, 'sent') ON DUPLICATE KEY UPDATE status = 'sent', sent_at = CURRENT_TIMESTAMP");
+                    $ins->execute([$postId, $channel]);
+                } catch (Exception $e) { }
                 $sent_count++;
-                log_message("Post {$post['id']} sent to channel $channel");
+                log_message("Post {$postId} sent to channel $channel");
             }
         }
-        
-        // حذف پست فقط اگر به همه کانال‌ها ارسال شده باشد
-        if ($success && $sent_count == $total_channels) {
-            $stmt = $pdo->prepare("DELETE FROM posts WHERE id = ?");
-            $stmt->execute([$post['id']]);
-            log_message("Post {$post['id']} sent to all channels and deleted successfully");
-        } else {
-            log_message("Post {$post['id']} not deleted - sent to $sent_count/$total_channels channels");
+
+        if ($sent_count >= $total_channels) {
+            $pdo->prepare("DELETE FROM post_sends WHERE post_id = ?")->execute([$postId]);
+            $pdo->prepare("DELETE FROM posts WHERE id = ?")->execute([$postId]);
+            log_message("Post {$postId} fully sent and deleted");
         }
     }
 
-    // پردازش پست‌های روزانه (ارسال امن و اتمیک)
+    // --- پست‌های روزانه ---
     foreach ($daily_posts as $post) {
         $postId = $post['id'];
 
-        // 1) Reserve this post for today (atomic). If duplicate, proceed.
+        // رزرو اتمیک روز (تاریخ تهران)
         try {
             $resStmt = $pdo->prepare("INSERT INTO daily_post_reservations (daily_post_id, reserved_date) VALUES (?, ?)");
-            $resStmt->execute([$postId, $current_date]);
-            log_message("Reserved daily_post {$postId} for date {$current_date}.");
+            $resStmt->execute([$postId, $tehranToday]);
         } catch (PDOException $e) {
-            $errInfo = $e->errorInfo ?? null;
-            $sqlState = is_array($errInfo) ? ($errInfo[0] ?? null) : $e->getCode();
-            $mysqlErrNo = is_array($errInfo) ? ($errInfo[1] ?? null) : null;
-            if ($sqlState === '23000' || $mysqlErrNo == 1062) {
-                log_message("daily_post {$postId} reservation already exists; proceeding to per-channel sends.");
-            } else {
+            $mysqlErrNo = is_array($e->errorInfo ?? null) ? ($e->errorInfo[1] ?? null) : null;
+            if ($mysqlErrNo != 1062) {
                 log_message("Error reserving daily_post {$postId}: " . $e->getMessage());
                 continue;
             }
         }
 
-        log_message("Processing daily post {$postId} (type: {$post['type']}, time: {$post['time']})");
-
         foreach ($channels as $channel) {
-            // Skip if already sent today
-            $checkStmt = $pdo->prepare("\n                SELECT id, status, tg_message_id, sent_at\n                FROM daily_post_sends\n                WHERE daily_post_id = ? AND channel_id = ? AND DATE(sent_at) = ?\n                LIMIT 1\n            ");
-            $checkStmt->execute([$postId, $channel, $current_date]);
+            $channel = (string)$channel;
+
+            // بررسی ارسال قبلی امروز (تاریخ تهران)
+            $checkStmt = $pdo->prepare(
+                "SELECT id, status FROM daily_post_sends WHERE daily_post_id = ? AND channel_id = ? AND sent_date = ? LIMIT 1"
+            );
+            $checkStmt->execute([$postId, $channel, $tehranToday]);
             $existing = $checkStmt->fetch(PDO::FETCH_ASSOC);
             if ($existing && $existing['status'] === 'sent') {
-                log_message("Post {$postId} already sent to {$channel} today (db id {$existing['id']}), skipping.");
                 continue;
             }
 
-            // Attempt to send
-            $apiResult = null;
+            // رزرو اتمیک کانال قبل از ارسال — جلوگیری از ارسال همزمان
             try {
-                if (($post['type'] ?? '') === 'forward') {
-                    $apiResult = telegram_api('forwardMessage', [
-                        'chat_id' => $channel,
-                        'from_chat_id' => $post['from_chat_id'],
-                        'message_id' => $post['message_id']
-                    ]);
+                $claim = $pdo->prepare(
+                    "INSERT INTO daily_post_sends (daily_post_id, channel_id, sent_date, status) VALUES (?, ?, ?, 'failed')"
+                );
+                $claim->execute([$postId, $channel, $tehranToday]);
+            } catch (PDOException $e) {
+                $mysqlErrNo = is_array($e->errorInfo ?? null) ? ($e->errorInfo[1] ?? null) : null;
+                if ($mysqlErrNo == 1062) {
+                    // رکورد وجود دارد — اگر sent است رد شود
+                    $recheck = $pdo->prepare(
+                        "SELECT status FROM daily_post_sends WHERE daily_post_id = ? AND channel_id = ? AND sent_date = ?"
+                    );
+                    $recheck->execute([$postId, $channel, $tehranToday]);
+                    if ($recheck->fetchColumn() === 'sent') {
+                        continue;
+                    }
                 } else {
-                    $apiResult = telegram_api('copyMessage', [
-                        'chat_id' => $channel,
-                        'from_chat_id' => $post['from_chat_id'],
-                        'message_id' => $post['message_id']
-                    ]);
+                    log_message("Claim failed for daily_post {$postId} channel {$channel}: " . $e->getMessage());
+                    continue;
                 }
-            } catch (Exception $e) {
-                $apiResult = false;
             }
+
+            $apiResult = ($post['type'] ?? '') === 'forward'
+                ? telegram_api('forwardMessage', [
+                    'chat_id' => $channel,
+                    'from_chat_id' => $post['from_chat_id'],
+                    'message_id' => $post['message_id']
+                ])
+                : telegram_api('copyMessage', [
+                    'chat_id' => $channel,
+                    'from_chat_id' => $post['from_chat_id'],
+                    'message_id' => $post['message_id']
+                ]);
 
             if ($apiResult === false || empty($apiResult['ok'])) {
                 $lastError = is_array($apiResult) && !empty($apiResult['description']) ? $apiResult['description'] : 'telegram_api_failed';
-                log_message("Failed to send post {$postId} to {$channel}: " . (string)$lastError);
-                // Upsert failure
-                try {
-                    $insertFail = $pdo->prepare("\n                        INSERT INTO daily_post_sends (daily_post_id, channel_id, status, attempt_count, last_error)\n                        VALUES (?, ?, 'failed', 1, ?)\n                        ON DUPLICATE KEY UPDATE\n                          attempt_count = attempt_count + 1,\n                          last_error = VALUES(last_error),\n                          sent_at = CURRENT_TIMESTAMP,\n                          status = 'failed'\n                    ");
-                    $insertFail->execute([$postId, $channel, $lastError]);
-                } catch (Exception $ie) {
-                    log_message("DB error recording failed send for post {$postId} channel {$channel}: " . $ie->getMessage());
-                }
+                $upd = $pdo->prepare(
+                    "UPDATE daily_post_sends SET status = 'failed', last_error = ?, attempt_count = attempt_count + 1 WHERE daily_post_id = ? AND channel_id = ? AND sent_date = ?"
+                );
+                $upd->execute([$lastError, $postId, $channel, $tehranToday]);
+                log_message("Failed daily post {$postId} to {$channel}: $lastError");
                 continue;
             }
 
-            // Success: capture Telegram message_id
-            $tgMsgId = null;
-            if (isset($apiResult['result']['message_id'])) {
-                $tgMsgId = $apiResult['result']['message_id'];
-            } elseif (isset($apiResult['result']) && is_array($apiResult['result'])) {
-                foreach ($apiResult['result'] as $k => $v) {
-                    if (is_array($v) && isset($v['message_id'])) {
-                        $tgMsgId = $v['message_id'];
-                        break;
-                    }
-                }
-            }
+            $tgMsgId = $apiResult['result']['message_id'] ?? null;
+            $upd = $pdo->prepare(
+                "UPDATE daily_post_sends SET status = 'sent', tg_message_id = ?, last_error = NULL, attempt_count = attempt_count + 1 WHERE daily_post_id = ? AND channel_id = ? AND sent_date = ?"
+            );
+            $upd->execute([$tgMsgId, $postId, $channel, $tehranToday]);
+            log_message("Daily post {$postId} sent to {$channel}, tg_msg_id={$tgMsgId}");
 
-            try {
-                $ins = $pdo->prepare("\n                    INSERT INTO daily_post_sends (daily_post_id, channel_id, tg_message_id, status, attempt_count)\n                    VALUES (?, ?, ?, 'sent', 1)\n                    ON DUPLICATE KEY UPDATE\n                      tg_message_id = VALUES(tg_message_id),\n                      status = 'sent',\n                      last_error = NULL,\n                      attempt_count = attempt_count + 1,\n                      sent_at = CURRENT_TIMESTAMP\n                ");
-                $ins->execute([$postId, $channel, $tgMsgId]);
-                log_message("Post {$postId} sent to {$channel}, tg_msg_id={$tgMsgId}.");
-            } catch (Exception $ie) {
-                log_message("DB error recording success for post {$postId} channel {$channel}: " . $ie->getMessage());
-            }
-
-            // Cleanup duplicates if any
             cleanup_duplicate_sends($pdo, $postId, $channel);
         }
     }
 
-    // release lock
     try { $pdo->query("SELECT RELEASE_LOCK('$lockName')"); } catch (Exception $e) { }
 }
 
 // دریافت آپدیت از تلگرام
+if (defined('BOT_SKIP_WEBHOOK')) {
+    return;
+}
 $content = file_get_contents("php://input");
 $update = json_decode($content, true);
 
@@ -968,7 +1046,7 @@ if ($step == 'addPost_active' || $step == 'addPost_hidden') {
     }
     
     set_step($from_id, "setT_{$temp_post_id}");
-    $current_time_example = substr(cairo_to_tehran(date('Y-m-d H:i:00')), 0, 16); // زمان تهران
+    $current_time_example = substr(tehran_datetime_minute(), 0, 16);
  send_message($from_id, "🕐 تاریخ و ساعت قرار گرفتن پست را به وقت تهران ارسال کنید:\n\n⚠️ فرمت: <code>YYYY-MM-DD HH:MM</code>\nمثال: <code>$current_time_example</code>");
 
     log_message("Post message $message_id saved in temp_posts for user $from_id, temp_post_id=$temp_post_id");
@@ -979,7 +1057,7 @@ if ($step == 'addPost_active' || $step == 'addPost_hidden') {
 // پردازش زمان ارسالی
 if (is_string($step) && strpos($step, 'setT_') === 0) {
     if (!validate_datetime($text)) {
-        $current_time_example = substr(cairo_to_tehran(date('Y-m-d H:i:00')), 0, 16); // زمان تهران
+        $current_time_example = substr(tehran_datetime_minute(), 0, 16);
         send_message($from_id, "❌ فرمت تاریخ و ساعت اشتباه است. لطفاً به وقت تهران و با فرمت زیر وارد کنید:\n\n<code>YYYY-MM-DD HH:MM</code>\nمثال: <code>$current_time_example</code>");
         log_message("Invalid datetime format by user $from_id: $text");
         http_response_code(200);
@@ -1187,7 +1265,7 @@ if ($step == 'addDailyPost') {
     }
     
     set_step($from_id, "setDailyT_{$temp_post_id}");
-    $current_time_example = substr(cairo_to_tehran(date('Y-m-d H:i:00')), 11, 5); // فقط ساعت و دقیقه تهران
+    $current_time_example = tehran_hm();
     $sentPrompt = send_message($from_id, "🕐 ساعت ارسال روزانه را به وقت تهران ارسال کنید:\n\n⚠️ فرمت: <code>HH:MM</code>\nمثال: <code>$current_time_example</code>");
 
     log_message("Daily post message $message_id saved in temp_posts for user $from_id, temp_post_id=$temp_post_id; prompt sent=" . ($sentPrompt ? 'yes' : 'no'));
@@ -1198,7 +1276,7 @@ if ($step == 'addDailyPost') {
 // پردازش زمان ارسالی برای پست روزانه
 if (is_string($step) && strpos($step, 'setDailyT_') === 0) {
     if (!validate_time($text)) {
-        $current_time_example = substr(cairo_to_tehran(date('Y-m-d H:i:00')), 11, 5); // فقط ساعت و دقیقه تهران
+        $current_time_example = tehran_hm();
         send_message($from_id, "❌ فرمت ساعت اشتباه است. لطفاً به وقت تهران و با فرمت زیر وارد کنید:\n\n<code>HH:MM</code>\nمثال: <code>$current_time_example</code>");
         log_message("Invalid time format for daily post by user $from_id: $text");
         http_response_code(200);
@@ -1222,16 +1300,14 @@ if (is_string($step) && strpos($step, 'setDailyT_') === 0) {
         http_response_code(200);
         exit();
     }
-    // تبدیل زمان تهران به قاهره برای ذخیره در دیتابیس
-    $today = date('Y-m-d'); // تاریخ امروز (قاهره)
-    $cairo_time = tehran_to_cairo("$today $text:00");
-    $cairo_time_only = substr($cairo_time, 11, 8); // استخراج HH:MM:SS
+    // ذخیره ساعت به وقت تهران (بدون تبدیل)
+    $tehran_time = (strlen($text) === 5) ? $text . ':00' : $text;
     $stmt = $pdo->prepare("INSERT INTO daily_posts (from_chat_id, message_id, time, type) VALUES (?, ?, ?, ?)");
-    $stmt->execute([$from_id, $temp_post['message_id'], $cairo_time_only, $temp_post['type']]);
+    $stmt->execute([$from_id, $temp_post['message_id'], $tehran_time, $temp_post['type']]);
     $stmt = $pdo->prepare("DELETE FROM temp_posts WHERE id = ?");
     $stmt->execute([$temp_post_id]);
     send_message($from_id, "✅ پست روزانه با موفقیت اضافه شد و هر روز در ساعت <code>$text</code> به وقت تهران ارسال خواهد شد.");
-    log_message("Daily post added by user $from_id: message_id={$temp_post['message_id']}, time=$cairo_time_only (Cairo, $text Tehran), type={$temp_post['type']}");
+    log_message("Daily post added by user $from_id: message_id={$temp_post['message_id']}, time=$tehran_time (Tehran), type={$temp_post['type']}");
     set_step($from_id);
     http_response_code(200);
     exit();
@@ -1250,7 +1326,7 @@ if ($text == '🚩 لیست پست‌های روزانه') {
     }
     foreach ($posts as $post) {
         $type = $post['type'] == 'forward' ? 'فوروارد' : 'کپی';
-        $tehran_time = substr(cairo_to_tehran("2025-01-01 {$post['time']}"), 11, 5); // تبدیل به وقت تهران
+        $tehran_time = substr($post['time'], 0, 5); // زمان ذخیره‌شده به وقت تهران
         $response = telegram_api('copyMessage', [
             'chat_id' => $from_id,
             'from_chat_id' => $post['from_chat_id'],
