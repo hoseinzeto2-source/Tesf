@@ -7,11 +7,11 @@ declare(strict_types=1);
  * Open once: /great/mather/tools/cache_miniapp_fonts.php
  */
 
-$root = dirname(__DIR__) . '/miniapp/assets/fonts';
+$root = dirname(__DIR__) . '/miniapp/css/fonts';
 $sources = [
-    'Peyda-Regular.ttf' => 'https://mr-cheat.ir/assets/fonts/Peyda-Regular.ttf',
-    'Peyda-Bold.ttf' => 'https://mr-cheat.ir/assets/fonts/Peyda-Bold.ttf',
-    'Peyda-Black.ttf' => 'https://mr-cheat.ir/assets/fonts/Peyda-Black.ttf',
+    'PeydaWeb-Regular.woff2' => 'https://cdn.jsdelivr.net/gh/AmirAbbasVafaee/persian-fonts-cdn@main/fonts/peyda/PeydaWeb-Regular.woff2',
+    'PeydaWeb-Bold.woff2' => 'https://cdn.jsdelivr.net/gh/AmirAbbasVafaee/persian-fonts-cdn@main/fonts/peyda/PeydaWeb-Bold.woff2',
+    'PeydaWeb-Black.woff2' => 'https://cdn.jsdelivr.net/gh/AmirAbbasVafaee/persian-fonts-cdn@main/fonts/peyda/PeydaWeb-Black.woff2',
 ];
 
 header('Content-Type: text/plain; charset=utf-8');
@@ -24,8 +24,8 @@ if (!is_dir($root) && !mkdir($root, 0755, true) && !is_dir($root)) {
 $written = [];
 $errors = [];
 foreach ($sources as $name => $url) {
-$ctx = stream_context_create([
-        'http' => ['timeout' => 15, 'header' => "User-Agent: gpro-font-cache/1.0\r\n"],
+    $ctx = stream_context_create([
+        'http' => ['timeout' => 30, 'header' => "User-Agent: gpro-font-cache/1.0\r\n"],
         'ssl' => ['verify_peer' => true, 'verify_peer_name' => true],
     ]);
     $body = @file_get_contents($url, false, $ctx);
