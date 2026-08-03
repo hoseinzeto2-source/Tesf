@@ -186,7 +186,7 @@ $logoUrl = 'https://mr-cheat.ir/assets/logo.png';
     <meta name="color-scheme" content="light" />
     <meta name="description" content="پنل manage | gpro100_bot" />
     <title>manage | gpro100_bot</title>
-    <link rel="preload" href="css/fontawesome/webfonts/fa-solid-900.woff2" as="font" type="font/woff2" crossorigin="anonymous" />
+    <link rel="preload" href="https://mr-cheat.ir/assets/fonts/Peyda-Regular.ttf" as="font" type="font/ttf" crossorigin="anonymous" />
     <link rel="preload" href="assets/fonts/Peyda-Regular.ttf" as="font" type="font/ttf" crossorigin="anonymous" />
     <link rel="stylesheet" href="css/fontawesome/all.min.css?v=<?= htmlspecialchars($assetVersion, ENT_QUOTES, 'UTF-8') ?>" />
     <style>
