@@ -537,6 +537,10 @@
           ? "انتخاب پوشه کانال"
           : mode === "hashtag_channel" || mode === "hashtag_set_settings_channel" || mode === "hashtag_add_channel"
             ? "انتخاب پوشه کانال"
+          : mode === "glass_add_folder" || mode === "glass_settings_folder"
+            ? "انتخاب پوشه کانال"
+          : mode === "banner_add_folder" || mode === "zapas_add_folder"
+            ? "انتخاب پوشه کانال"
           : mode === "post_session_bot"
             ? "انتخاب پوشه ربات"
             : mode === "add_bot_folder"
@@ -555,6 +559,12 @@
           ? "فقط پوشه‌های اخلاقی / غیراخلاقی · با + زیرپوشه‌ها را باز کنید"
           : mode === "hashtag_channel" || mode === "hashtag_set_settings_channel" || mode === "hashtag_add_channel"
             ? "پوشه کانال مرتبط با هشتگ‌ها · با + زیرپوشه‌ها را باز کنید"
+          : mode === "glass_add_folder" || mode === "glass_settings_folder"
+            ? "پوشه کانال برای دکمه شیشه‌ای · با + زیرپوشه‌ها را باز کنید"
+          : mode === "banner_add_folder"
+            ? "پوشه کانال برای عکس بنر · با + زیرپوشه‌ها را باز کنید"
+          : mode === "zapas_add_folder"
+            ? "پوشه کانال برای زاپاس · با + زیرپوشه‌ها را باز کنید"
           : mode === "post_session_bot"
             ? "پوشه‌های بخش ربات‌های من · با + زیرپوشه‌ها را باز کنید"
             : mode === "add_bot_folder"
@@ -575,6 +585,10 @@
         "hashtag_channel",
         "hashtag_set_settings_channel",
         "hashtag_add_channel",
+        "glass_add_folder",
+        "glass_settings_folder",
+        "banner_add_folder",
+        "zapas_add_folder",
         "post_session_bot",
       ].includes(mode);
     }
@@ -781,6 +795,29 @@
         return;
       }
       createZapasBindingForFolder(folderId);
+      tg?.HapticFeedback?.selectionChanged();
+      return;
+    }
+
+    if (mode === "glass_add_folder" || mode === "glass_settings_folder") {
+      if (!folderId || folderId <= 0) {
+        showToast("پوشه کانال را انتخاب کنید", { type: "warning" });
+        return;
+      }
+      if (mode === "glass_settings_folder") {
+        const existing = getGlassButtonSettingByFolder(folderId);
+        state.glassButtonSelectedFolderId = folderId;
+        loadGlassButtonSettingsEditor(existing, folderId);
+        renderGlassButtonConfigsList();
+      } else {
+        const existing = getGlassButtonSettingByFolder(folderId);
+        if (existing) {
+          selectGlassButtonConfig(folderId, { openSettings: true });
+          showToast("این پوشه قبلاً تنظیم شده — در حال ویرایش", { type: "info", duration: 2200 });
+        } else {
+          selectGlassButtonConfig(folderId, { openSettings: true, createIfMissing: true });
+        }
+      }
       tg?.HapticFeedback?.selectionChanged();
       return;
     }
@@ -5476,12 +5513,12 @@
         <span class="explorer-tile__name">عکس بنر</span>
         <span class="explorer-tile__meta">${escapeHtml(bannerMeta)}</span>
       </div>
-      <div class="explorer-tile explorer-tile--glass" data-glass-plugin="1" tabindex="0" role="button">
-        <span class="explorer-tile__icon explorer-tile__icon--glass"><i class="fa-solid fa-square-arrow-up-right"></i></span>
+      <div class="explorer-tile explorer-tile--tool explorer-tile--glass" data-glass-plugin="1" tabindex="0" role="button">
+        <span class="explorer-tile__icon explorer-tile__icon--glass"><i class="fa-solid fa-up-right-from-square"></i></span>
         <span class="explorer-tile__name">دکمه شیشه‌ای</span>
         <span class="explorer-tile__meta">${escapeHtml(glassMeta)}</span>
       </div>
-      <div class="explorer-tile explorer-tile--zapas" data-zapas-plugin="1" tabindex="0" role="button">
+      <div class="explorer-tile explorer-tile--tool explorer-tile--zapas" data-zapas-plugin="1" tabindex="0" role="button">
         <span class="explorer-tile__icon explorer-tile__icon--zapas"><i class="fa-solid fa-shield-halved"></i></span>
         <span class="explorer-tile__name">زاپاس</span>
         <span class="explorer-tile__meta">${escapeHtml(zapasMeta)}</span>
@@ -6037,37 +6074,247 @@
     return data;
   }
 
-  function populateGlassButtonFolderSelect() {
-    const select = document.getElementById("glassButtonFolderSelect");
-    if (!select) return;
+  function glassButtonDisplayModeLabel(mode) {
+    return mode === "caption_links" ? "لینک در کپشن" : "دکمه شیشه‌ای";
+  }
+
+  function glassButtonRowsLabel(rows) {
+    return Number(rows) === 2 ? "دو ردیف" : "یک ردیف";
+  }
+
+  function getGlassButtonSettingByFolder(folderId) {
+    const settings = state.cache?.glassButtonTools?.settings || [];
+    return settings.find((s) => Number(s.channel_folder_id) === Number(folderId)) || null;
+  }
+
+  function buildGlassConfigItemHtml(setting, isActive) {
+    const folderPath = setting.channel_folder_path || "پوشه";
+    const modeLabel = glassButtonDisplayModeLabel(setting.display_mode);
+    const statusBadge = setting.is_enabled
+      ? '<span class="glass-config-item__badge glass-config-item__badge--on">فعال</span>'
+      : '<span class="glass-config-item__badge glass-config-item__badge--off">غیرفعال</span>';
+
+    return `
+      <button type="button" class="glass-config-item${isActive ? " is-active" : ""}" data-glass-config-folder="${setting.channel_folder_id}">
+        <span class="glass-config-item__icon" aria-hidden="true"><i class="fa-solid fa-folder"></i></span>
+        <span class="glass-config-item__main">
+          <span class="glass-config-item__name">${escapeHtml(folderPath)}</span>
+          <span class="glass-config-item__meta">${escapeHtml(setting.button_text || "دریافت محتوا")} · ${escapeHtml(modeLabel)} · ${glassButtonRowsLabel(setting.button_rows)}</span>
+        </span>
+        ${statusBadge}
+        <i class="fa-solid fa-chevron-left glass-config-item__chevron" aria-hidden="true"></i>
+      </button>`;
+  }
+
+  function renderGlassButtonConfigsList() {
+    const settings = state.cache?.glassButtonTools?.settings || [];
+    const selectedId = Number(state.glassButtonSelectedFolderId || 0);
+    const lists = [
+      document.getElementById("glassButtonSettingsList"),
+      document.getElementById("glassButtonFoldersList"),
+    ];
+
+    const emptyHtml =
+      '<p class="channel-empty__sub">هنوز تنظیمی ذخیره نشده — «افزودن» را بزنید.</p>';
+    const html = settings.length
+      ? settings.map((s) => buildGlassConfigItemHtml(s, Number(s.channel_folder_id) === selectedId)).join("")
+      : emptyHtml;
+
+    lists.forEach((list) => {
+      if (!list) return;
+      list.innerHTML = html;
+      if (settings.length) {
+        list.querySelectorAll("[data-glass-config-folder]").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            selectGlassButtonConfig(Number(btn.dataset.glassConfigFolder), { openSettings: true });
+            tg?.HapticFeedback?.selectionChanged();
+          });
+        });
+      }
+    });
+
+    const selected = selectedId > 0 ? getGlassButtonSettingByFolder(selectedId) : null;
     const folders = state.cache?.channels?.folders || [];
-    select.innerHTML = folders
-      .map((f) => `<option value="${f.id}">${escapeHtml(f.name || "پوشه")}</option>`)
-      .join("");
+    const activeLabel = document.getElementById("glassButtonActiveConfigLabel");
+    if (activeLabel) {
+      activeLabel.textContent = selected
+        ? `در حال ویرایش: ${selected.channel_folder_path || getFolderDisplayPath(folders, selectedId)}`
+        : settings.length
+          ? "یک پوشه را برای ویرایش انتخاب کنید"
+          : "هنوز پوشه کانالی متصل نشده — «افزودن» را بزنید";
+    }
+  }
+
+  function renderGlassButtonPreview(setting) {
+    const preview = document.getElementById("glassButtonPreviewBody");
+    if (!preview) return;
+
+    const current =
+      setting ||
+      (state.glassButtonSelectedFolderId
+        ? getGlassButtonSettingByFolder(state.glassButtonSelectedFolderId)
+        : null) ||
+      (state.cache?.glassButtonTools?.settings || [])[0] ||
+      null;
+
+    if (!current) {
+      preview.innerHTML =
+        '<p class="channel-empty__sub">پس از افزودن پوشه، پیش‌نمایش دکمه اینجا نمایش داده می‌شود.</p>';
+      return;
+    }
+
+    const buttonText = current.button_text || "دریافت محتوا";
+    const lineText = current.line_text || "📥 مشاهده کردن";
+    const rows = Math.max(1, Math.min(2, Number(current.button_rows || 1)));
+    const mode = current.display_mode || "inline_buttons";
+
+    if (mode === "caption_links") {
+      const lines = Array.from({ length: rows }, () => lineText).join("<br>");
+      preview.innerHTML = `<div class="glass-button-preview__caption-links">${lines}</div>`;
+      return;
+    }
+
+    preview.innerHTML = Array.from(
+      { length: rows },
+      () =>
+        `<span class="glass-button-preview__btn"><span class="glass-button-preview__dot" aria-hidden="true"></span>${escapeHtml(buttonText)}</span>`
+    ).join("");
+  }
+
+  function loadGlassButtonSettingsEditor(setting, folderId = 0) {
+    const folders = state.cache?.channels?.folders || [];
+    const folder = Number(folderId || setting?.channel_folder_id || 0);
+    const defaults = {
+      button_text: "دریافت محتوا",
+      line_text: "📥 مشاهده کردن",
+      display_mode: "inline_buttons",
+      button_rows: 1,
+      is_enabled: true,
+    };
+    const data = setting || defaults;
+
+    setGlassButtonFolderSelection(folder, { silent: true });
+    document.getElementById("glassButtonText").value = data.button_text || defaults.button_text;
+    document.getElementById("glassButtonLineText").value = data.line_text || defaults.line_text;
+
+    const modeRadio = document.querySelector(
+      `input[name="glassButtonDisplayMode"][value="${data.display_mode || defaults.display_mode}"]`
+    );
+    if (modeRadio) modeRadio.checked = true;
+
+    const rowsRadio = document.querySelector(
+      `input[name="glassButtonRows"][value="${String(data.button_rows || defaults.button_rows)}"]`
+    );
+    if (rowsRadio) rowsRadio.checked = true;
+
+    document.getElementById("glassButtonEnabled").checked = setting ? !!setting.is_enabled : true;
+
+    const deleteBtn = document.getElementById("btnDeleteGlassButton");
+    if (deleteBtn) deleteBtn.hidden = !setting;
+
+    const banner = document.getElementById("glassButtonSettingsBanner");
+    if (banner) {
+      banner.textContent = folder > 0
+        ? `پیکربندی: ${setting?.channel_folder_path || getFolderDisplayPath(folders, folder)}`
+        : "ابتدا پوشه کانال را انتخاب کنید";
+    }
+
+    renderGlassButtonPreview(setting || { ...defaults, ...data, channel_folder_id: folder });
+  }
+
+  function setGlassButtonFolderSelection(folderId, options = {}) {
+    const id = Number(folderId) || 0;
+    const folders = state.cache?.channels?.folders || [];
+    const hidden = document.getElementById("glassButtonFolderInput");
+    const label = document.getElementById("glassButtonFolderLabel");
+    if (hidden) hidden.value = id > 0 ? String(id) : "";
+    if (label) {
+      label.textContent = id > 0 ? getFolderDisplayPath(folders, id) : "— انتخاب پوشه کانال —";
+    }
+    if (!options.silent && id <= 0) {
+      showToast("پوشه کانال را انتخاب کنید", { type: "warning" });
+    }
+  }
+
+  function selectGlassButtonConfig(folderId, options = {}) {
+    const id = Number(folderId) || 0;
+    if (id <= 0) return;
+    state.glassButtonSelectedFolderId = id;
+    const setting = getGlassButtonSettingByFolder(id);
+    if (!setting && options.createIfMissing) {
+      loadGlassButtonSettingsEditor(null, id);
+      renderGlassButtonConfigsList();
+      if (options.openSettings) showGlassButtonTab("settings");
+      return;
+    }
+    loadGlassButtonSettingsEditor(setting, id);
+    renderGlassButtonConfigsList();
+    if (options.openSettings) showGlassButtonTab("settings");
+  }
+
+  function showGlassButtonTab(tab) {
+    state.glassButtonTab = tab;
+    const panels = {
+      overview: document.getElementById("glassButtonPanelOverview"),
+      folders: document.getElementById("glassButtonPanelFolders"),
+      settings: document.getElementById("glassButtonPanelSettings"),
+    };
+    Object.entries(panels).forEach(([name, el]) => {
+      if (!el) return;
+      if (name === tab) {
+        el.removeAttribute("hidden");
+        el.classList.add("is-active");
+      } else {
+        el.setAttribute("hidden", "");
+        el.classList.remove("is-active");
+      }
+    });
+    document.querySelectorAll("[data-glass-button-tab]").forEach((btn) => {
+      btn.classList.toggle("is-active", btn.dataset.glassButtonTab === tab);
+    });
+    if (tab === "settings" && state.glassButtonSelectedFolderId) {
+      const setting = getGlassButtonSettingByFolder(state.glassButtonSelectedFolderId);
+      loadGlassButtonSettingsEditor(setting, state.glassButtonSelectedFolderId);
+    }
+    if (tab === "overview" || tab === "folders") {
+      renderGlassButtonPreview();
+    }
+  }
+
+  function openGlassButtonFolderPicker(mode = "glass_add_folder") {
+    const folders = state.cache?.channels?.folders || [];
+    if (!folders.length) {
+      showToast("ابتدا یک پوشه کانال بسازید", { type: "warning" });
+      return;
+    }
+    openFolderTreePicker({ mode, folders, allowRoot: false });
   }
 
   function renderGlassButtonDetail(data) {
     const stats = data?.stats || {};
-    setText("glassButtonDetailMeta", `${stats.active_count || 0} پوشه فعال از ${stats.settings_count || 0}`);
-    populateGlassButtonFolderSelect();
     const settings = data?.settings || [];
-    const list = document.getElementById("glassButtonSettingsList");
-    if (!list) return;
-    if (!settings.length) {
-      list.innerHTML = '<p class="channel-empty__sub">هنوز تنظیمی ذخیره نشده.</p>';
-      return;
+    const inlineCount = settings.filter((s) => s.display_mode !== "caption_links").length;
+    const captionCount = settings.filter((s) => s.display_mode === "caption_links").length;
+
+    setText(
+      "glassButtonDetailMeta",
+      `${stats.active_count || 0} پوشه فعال از ${stats.settings_count || 0}`
+    );
+    setText("glassButtonStatActive", formatNumber(stats.active_count || 0));
+    setText("glassButtonStatTotal", formatNumber(stats.settings_count || 0));
+    setText("glassButtonStatInline", formatNumber(inlineCount));
+    setText("glassButtonStatCaption", formatNumber(captionCount));
+
+    if (!state.glassButtonSelectedFolderId && settings.length) {
+      state.glassButtonSelectedFolderId = Number(settings[0].channel_folder_id);
     }
-    list.innerHTML = settings
-      .map(
-        (s) => `
-      <div class="hashtag-config-item">
-        <span class="hashtag-config-item__main">
-          <span class="hashtag-config-item__name">${escapeHtml(s.channel_folder_path || "پوشه")}</span>
-          <span class="hashtag-config-item__meta">${escapeHtml(s.button_text || "")} · ${s.display_mode === "caption_links" ? "لینک در کپشن" : "دکمه شیشه‌ای"} · ${s.is_enabled ? "فعال" : "غیرفعال"}</span>
-        </span>
-      </div>`
-      )
-      .join("");
+
+    renderGlassButtonConfigsList();
+    const selected = state.glassButtonSelectedFolderId
+      ? getGlassButtonSettingByFolder(state.glassButtonSelectedFolderId)
+      : null;
+    loadGlassButtonSettingsEditor(selected, state.glassButtonSelectedFolderId || 0);
+    renderGlassButtonPreview(selected);
   }
 
   async function openGlassButtonPluginDetail() {
@@ -6082,6 +6329,7 @@
       detail?.classList.add("is-active");
       bottomNav?.setAttribute("hidden", "hidden");
       renderGlassButtonDetail(data);
+      showGlassButtonTab(state.glassButtonTab || "overview");
       tg?.HapticFeedback?.selectionChanged();
     } catch (_) {
       showToast("بارگذاری دکمه شیشه‌ای ناموفق بود", { type: "error" });
@@ -6097,27 +6345,66 @@
   }
 
   async function saveGlassButtonSettings() {
-    const folderId = Number(document.getElementById("glassButtonFolderSelect")?.value || 0);
+    const folderId = Number(document.getElementById("glassButtonFolderInput")?.value || 0);
     if (!folderId) {
       showToast("پوشه کانال را انتخاب کنید", { type: "warning" });
       return;
     }
+    const displayMode =
+      document.querySelector('input[name="glassButtonDisplayMode"]:checked')?.value || "inline_buttons";
+    const buttonRows =
+      Number(document.querySelector('input[name="glassButtonRows"]:checked')?.value || 1);
     try {
       await glassButtonToolsApi({
         action: "save_settings",
         channel_folder_id: folderId,
         button_text: document.getElementById("glassButtonText")?.value?.trim() || "دریافت محتوا",
         line_text: document.getElementById("glassButtonLineText")?.value?.trim() || "📥 مشاهده کردن",
-        display_mode: document.getElementById("glassButtonDisplayMode")?.value || "inline_buttons",
-        button_rows: Number(document.getElementById("glassButtonRows")?.value || 1),
+        display_mode: displayMode,
+        button_rows: buttonRows,
         button_style: "green",
         is_enabled: !!document.getElementById("glassButtonEnabled")?.checked,
       });
-      await reloadGlassButtonTools();
+      state.glassButtonSelectedFolderId = folderId;
+      const data = await reloadGlassButtonTools();
+      renderGlassButtonDetail(data);
+      showGlassButtonTab("overview");
       showToast("تنظیمات دکمه شیشه‌ای ذخیره شد", { type: "success" });
     } catch (_) {
       showToast("ذخیره ناموفق بود", { type: "error" });
     }
+  }
+
+  async function deleteGlassButtonSettings() {
+    const folderId = Number(state.glassButtonSelectedFolderId || document.getElementById("glassButtonFolderInput")?.value || 0);
+    if (!folderId) {
+      showToast("پوشه‌ای انتخاب نشده", { type: "warning" });
+      return;
+    }
+    try {
+      await glassButtonToolsApi({ action: "delete_settings", channel_folder_id: folderId });
+      state.glassButtonSelectedFolderId = 0;
+      const data = await reloadGlassButtonTools();
+      renderGlassButtonDetail(data);
+      showGlassButtonTab("overview");
+      showToast("تنظیمات حذف شد", { type: "success" });
+    } catch (_) {
+      showToast("حذف ناموفق بود", { type: "error" });
+    }
+  }
+
+  function updateGlassButtonPreviewFromForm() {
+    const folderId = Number(document.getElementById("glassButtonFolderInput")?.value || 0);
+    const previewSetting = {
+      channel_folder_id: folderId,
+      button_text: document.getElementById("glassButtonText")?.value?.trim() || "دریافت محتوا",
+      line_text: document.getElementById("glassButtonLineText")?.value?.trim() || "📥 مشاهده کردن",
+      display_mode:
+        document.querySelector('input[name="glassButtonDisplayMode"]:checked')?.value || "inline_buttons",
+      button_rows: Number(document.querySelector('input[name="glassButtonRows"]:checked')?.value || 1),
+      is_enabled: !!document.getElementById("glassButtonEnabled")?.checked,
+    };
+    renderGlassButtonPreview(previewSetting);
   }
 
   function renderZapasDetail(data) {
@@ -9226,6 +9513,22 @@
       tg?.HapticFeedback?.selectionChanged();
     });
     document.getElementById("btnSaveGlassButton")?.addEventListener("click", saveGlassButtonSettings);
+    document.getElementById("btnDeleteGlassButton")?.addEventListener("click", deleteGlassButtonSettings);
+    document.getElementById("btnGlassButtonAddFolder")?.addEventListener("click", () => openGlassButtonFolderPicker("glass_add_folder"));
+    document.getElementById("btnGlassButtonAddFolder2")?.addEventListener("click", () => openGlassButtonFolderPicker("glass_add_folder"));
+    document.getElementById("glassButtonFolderBtn")?.addEventListener("click", () => openGlassButtonFolderPicker("glass_settings_folder"));
+    document.querySelectorAll("[data-glass-button-tab]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        showGlassButtonTab(btn.dataset.glassButtonTab || "overview");
+        tg?.HapticFeedback?.selectionChanged();
+      });
+    });
+    ["glassButtonText", "glassButtonLineText"].forEach((id) => {
+      document.getElementById(id)?.addEventListener("input", updateGlassButtonPreviewFromForm);
+    });
+    document.querySelectorAll('input[name="glassButtonDisplayMode"], input[name="glassButtonRows"]').forEach((input) => {
+      input.addEventListener("change", updateGlassButtonPreviewFromForm);
+    });
 
     document.getElementById("btnZapasBack")?.addEventListener("click", () => {
       closeZapasDetail();

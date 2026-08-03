@@ -1337,54 +1337,143 @@ $logoUrl = 'https://mr-cheat.ir/assets/logo.png';
             </button>
             <div class="topbar__brand">
               <div class="channel-avatar channel-avatar--sm channel-avatar--glass">
-                <i class="fa-solid fa-square-arrow-up-right"></i>
+                <i class="fa-solid fa-up-right-from-square"></i>
               </div>
               <div class="topbar__text">
-                <h2 class="topbar__title">دکمه شیشه‌ای</h2>
+                <h2 id="glassButtonDetailTitle" class="topbar__title">دکمه شیشه‌ای</h2>
                 <p id="glassButtonDetailMeta" class="topbar__sub">—</p>
               </div>
             </div>
           </header>
-          <div class="channel-panel is-active">
+
+          <nav class="channel-subnav channel-subnav--three" aria-label="بخش‌های دکمه شیشه‌ای">
+            <button type="button" class="channel-subnav__btn is-active" data-glass-button-tab="overview">
+              <i class="fa-solid fa-gauge-high"></i>
+              <span>نگاه کلی</span>
+            </button>
+            <button type="button" class="channel-subnav__btn" data-glass-button-tab="folders">
+              <i class="fa-solid fa-folder-tree"></i>
+              <span>پوشه‌ها</span>
+            </button>
+            <button type="button" class="channel-subnav__btn" data-glass-button-tab="settings">
+              <i class="fa-solid fa-sliders"></i>
+              <span>تنظیمات</span>
+            </button>
+          </nav>
+
+          <div id="glassButtonPanelOverview" class="channel-panel is-active">
+            <div class="stats-grid">
+              <article class="stat-card">
+                <span class="stat-card__label">فعال</span>
+                <strong id="glassButtonStatActive" class="stat-card__value">—</strong>
+              </article>
+              <article class="stat-card">
+                <span class="stat-card__label">کل تنظیمات</span>
+                <strong id="glassButtonStatTotal" class="stat-card__value">—</strong>
+              </article>
+              <article class="stat-card">
+                <span class="stat-card__label">دکمه شیشه‌ای</span>
+                <strong id="glassButtonStatInline" class="stat-card__value">—</strong>
+              </article>
+              <article class="stat-card">
+                <span class="stat-card__label">لینک در کپشن</span>
+                <strong id="glassButtonStatCaption" class="stat-card__value">—</strong>
+              </article>
+            </div>
+
             <article class="glass-card panel-card">
-              <h3 class="panel-card__title"><i class="fa-solid fa-sliders"></i> تنظیمات پوشه</h3>
+              <div class="panel-card__head-row">
+                <h3 class="panel-card__title"><i class="fa-solid fa-folder-tree"></i> پوشه‌های تنظیم‌شده</h3>
+                <button id="btnGlassButtonAddFolder" type="button" class="btn btn--ghost btn--sm panel-card__action">
+                  <i class="fa-solid fa-plus"></i>
+                  افزودن
+                </button>
+              </div>
+              <p id="glassButtonActiveConfigLabel" class="hashtag-active-config glass-active-config">—</p>
+              <div id="glassButtonSettingsList" class="glass-configs-list"></div>
+            </article>
+
+            <article class="glass-card panel-card">
+              <h3 class="panel-card__title"><i class="fa-solid fa-eye"></i> پیش‌نمایش</h3>
+              <div id="glassButtonPreview" class="glass-button-preview">
+                <p class="glass-button-preview__caption">کپشن نمونه پست کانال</p>
+                <div id="glassButtonPreviewBody" class="glass-button-preview__body"></div>
+              </div>
+              <p class="hint-text">
+                <i class="fa-solid fa-circle-info"></i>
+                در پست خودکار و ربات محافظ، دکمه یا لینک دریافت محتوا با همین تنظیمات نمایش داده می‌شود.
+              </p>
+            </article>
+          </div>
+
+          <div id="glassButtonPanelFolders" class="channel-panel" hidden>
+            <article class="glass-card panel-card">
+              <div class="panel-card__head-row">
+                <h3 class="panel-card__title"><i class="fa-solid fa-list"></i> همه پوشه‌ها</h3>
+                <button id="btnGlassButtonAddFolder2" type="button" class="btn btn--ghost btn--sm panel-card__action">
+                  <i class="fa-solid fa-plus"></i>
+                  افزودن
+                </button>
+              </div>
+              <div id="glassButtonFoldersList" class="glass-configs-list"></div>
+            </article>
+          </div>
+
+          <div id="glassButtonPanelSettings" class="channel-panel" hidden>
+            <article class="glass-card panel-card">
+              <p id="glassButtonSettingsBanner" class="hashtag-active-config glass-active-config">پیکربندی: —</p>
+              <h3 class="panel-card__title"><i class="fa-solid fa-pen-to-square"></i> تنظیمات پوشه</h3>
               <label class="field">
                 <span class="field__label">پوشه کانال</span>
-                <select id="glassButtonFolderSelect" class="field__input"></select>
+                <button id="glassButtonFolderBtn" type="button" class="folder-pick-btn">
+                  <i class="fa-solid fa-folder-tree"></i>
+                  <span id="glassButtonFolderLabel">— انتخاب پوشه کانال —</span>
+                </button>
+                <input id="glassButtonFolderInput" type="hidden" value="" />
               </label>
               <label class="field">
                 <span class="field__label">متن دکمه</span>
-                <input id="glassButtonText" class="field__input" type="text" value="دریافت محتوا" placeholder="دریافت محتوا" />
+                <input id="glassButtonText" class="field__input" type="text" value="دریافت محتوا" placeholder="دریافت محتوا" maxlength="120" />
               </label>
               <label class="field">
                 <span class="field__label">متن لینک در کپشن</span>
-                <input id="glassButtonLineText" class="field__input" type="text" value="📥 مشاهده کردن" />
+                <input id="glassButtonLineText" class="field__input" type="text" value="📥 مشاهده کردن" maxlength="120" />
               </label>
-              <label class="field">
-                <span class="field__label">حالت نمایش</span>
-                <select id="glassButtonDisplayMode" class="field__input">
-                  <option value="inline_buttons">دکمه شیشه‌ای (سبز)</option>
-                  <option value="caption_links">لینک داخل کپشن</option>
-                </select>
-              </label>
-              <label class="field">
-                <span class="field__label">تعداد ردیف</span>
-                <select id="glassButtonRows" class="field__input">
-                  <option value="1">یک ردیف</option>
-                  <option value="2">دو ردیف</option>
-                </select>
-              </label>
+              <p class="field__label">حالت نمایش</p>
+              <div class="radio-row">
+                <label class="radio-pill">
+                  <input type="radio" name="glassButtonDisplayMode" value="inline_buttons" checked />
+                  <span>دکمه شیشه‌ای (سبز)</span>
+                </label>
+                <label class="radio-pill">
+                  <input type="radio" name="glassButtonDisplayMode" value="caption_links" />
+                  <span>لینک در کپشن</span>
+                </label>
+              </div>
+              <p class="field__label">تعداد ردیف</p>
+              <div class="radio-row">
+                <label class="radio-pill">
+                  <input type="radio" name="glassButtonRows" value="1" checked />
+                  <span>یک ردیف</span>
+                </label>
+                <label class="radio-pill">
+                  <input type="radio" name="glassButtonRows" value="2" />
+                  <span>دو ردیف</span>
+                </label>
+              </div>
               <label class="field field--checkbox">
                 <input id="glassButtonEnabled" type="checkbox" checked />
                 <span>فعال برای این پوشه</span>
               </label>
-              <button id="btnSaveGlassButton" type="button" class="btn btn--primary btn--block">
-                <i class="fa-solid fa-floppy-disk"></i> ذخیره تنظیمات
+              <button id="btnSaveGlassButton" type="button" class="btn btn--primary btn--block panel-card__action">
+                <i class="fa-solid fa-floppy-disk"></i>
+                ذخیره تنظیمات
               </button>
-            </article>
-            <article class="glass-card panel-card">
-              <h3 class="panel-card__title"><i class="fa-solid fa-list"></i> پوشه‌های تنظیم‌شده</h3>
-              <div id="glassButtonSettingsList" class="hashtag-configs-list"></div>
+              <button id="btnDeleteGlassButton" type="button" class="btn btn--ghost btn--block btn--danger panel-card__action" hidden>
+                <i class="fa-solid fa-trash"></i>
+                حذف تنظیمات این پوشه
+              </button>
+              <p id="glassButtonSaveStatus" class="hint-text" hidden></p>
             </article>
           </div>
         </section>
