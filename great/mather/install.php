@@ -20,7 +20,8 @@ if (($_GET['schema_bootstrap'] ?? '') === '1') {
     }
 
     require_once __DIR__ . '/lib/schema_bootstrap.php';
-    echo json_encode(runSchemaMigrations(), JSON_UNESCAPED_UNICODE);
+    $forceMarker = !empty($_GET['force_marker']);
+    echo json_encode(runSchemaMigrations($forceMarker), JSON_UNESCAPED_UNICODE);
     exit;
 }
 

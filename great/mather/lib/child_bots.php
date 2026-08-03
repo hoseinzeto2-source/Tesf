@@ -139,17 +139,19 @@ function getChildBotByKey(string $key): ?array
     return $row ?: null;
 }
 
-function getChildBotsByOwner(int $ownerId): array
+function getChildBotsByOwner(int $ownerId, bool $withUploadsCount = true): array
 {
     ensureChildBotTables();
     require_once __DIR__ . '/bot_health.php';
     ensureChildBotHealthColumns();
     $db = getDb();
+    $uploadsSql = $withUploadsCount
+        ? ', (SELECT COUNT(*) FROM uploader_files uf WHERE uf.child_bot_id = child_bots.id) AS uploads_count'
+        : ', 0 AS uploads_count';
     $stmt = $db->prepare(
         'SELECT id, bot_telegram_id, bot_username, bot_name, bot_type, channel_folder_id, uploader_version_id, status,
                 health_status, health_message, problem_since, last_health_check, profile_photo_file_id, created_at,
-                is_pinned, pinned_at,
-        (SELECT COUNT(*) FROM uploader_files uf WHERE uf.child_bot_id = child_bots.id) AS uploads_count
+                is_pinned, pinned_at' . $uploadsSql . '
         FROM child_bots WHERE owner_telegram_id = ? ORDER BY is_pinned DESC, pinned_at DESC, id DESC'
     );
     $stmt->bind_param('i', $ownerId);

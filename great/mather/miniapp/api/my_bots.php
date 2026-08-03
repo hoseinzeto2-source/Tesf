@@ -14,7 +14,7 @@ $user = requireTelegramUser();
 $telegramId = (int) $user['id'];
 
 try {
-    $bots = getChildBotsByOwner($telegramId);
+    $bots = getChildBotsByOwner($telegramId, false);
     $folders = getBotFolders($telegramId);
     $bots = attachFolderIdsToBots($bots, $telegramId, $folders);
 
