@@ -2356,7 +2356,7 @@
   function joinErrorMessage(err) {
     const code = String(err?.message || err || "");
     if (code.includes("manage_bot_not_admin")) {
-      return "ربات مدیریت (@gpro100_bot) باید ادمین کانال باشد";
+      return "یکی از ربات‌های مدیریت باید ادمین کانال باشد";
     }
     if (code.includes("folder_empty")) return "این پوشه ربات ندارد";
     return "عملیات ناموفق بود";
@@ -8618,6 +8618,15 @@
     card.hidden = false;
     const bots = server.manage_bots || [];
     const stats = server.manage_bots_stats || {};
+
+    if (server.manage_bots_available === false) {
+      if (statsLine) {
+        statsLine.textContent = "فایل‌های سرور هنوز به‌روز نشده — لیست زیر پس از آپلود کامل نمایش داده می‌شود.";
+      }
+      list.innerHTML = `<p class="channel-empty__sub">بخش ربات‌های مدیریت در مینی‌اپ آماده است، اما فایل‌های <code>lib/manage_bots.php</code> روی هاست آپلود نشده‌اند. پس از آپلود، یک‌بار <code>install.php</code> را اجرا کنید.</p>`;
+      return;
+    }
+
     if (statsLine) {
       statsLine.textContent = `${stats.active_bot_count || bots.length} ربات · ${stats.total_channel_bindings || 0} کانال متصل · حداکثر ${stats.channel_limit || 500} کانال per ربات`;
     }

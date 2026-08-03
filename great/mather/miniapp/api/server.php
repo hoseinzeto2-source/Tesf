@@ -6,7 +6,6 @@ require_once dirname(__DIR__, 2) . '/lib/channels.php';
 require_once dirname(__DIR__, 2) . '/lib/bot_health.php';
 require_once dirname(__DIR__, 2) . '/lib/uploader_versions.php';
 require_once dirname(__DIR__, 2) . '/lib/global_bot_owners.php';
-require_once dirname(__DIR__, 2) . '/lib/manage_bots.php';
 require_once dirname(__DIR__) . '/lib/telegram_webapp.php';
 
 $user = requireTelegramUser();
@@ -71,7 +70,18 @@ $defaultUploaderVersion = getDefaultUploaderVersion();
 $defaultGuardianVersion = getDefaultVersionForBotRole('guardian');
 $uploaderVersions = $isAdmin ? listUploaderVersions() : [];
 $globalBotOwners = $isAdmin ? listGlobalBotOwners() : [];
-$manageBotsOverview = $isAdmin ? getManageBotsOverview() : ['bots' => [], 'stats' => []];
+$manageBotsOverview = ['bots' => [], 'stats' => []];
+if ($isAdmin) {
+    $manageBotsLib = dirname(__DIR__, 2) . '/lib/manage_bots.php';
+    if (is_file($manageBotsLib)) {
+        require_once $manageBotsLib;
+        try {
+            $manageBotsOverview = getManageBotsOverview();
+        } catch (Throwable $e) {
+            error_log('manage_bots overview: ' . $e->getMessage());
+        }
+    }
+}
 
 $channelProblems = [];
 $botProblems = [];
@@ -124,5 +134,6 @@ jsonResponse([
         'global_bot_owners' => $globalBotOwners,
         'manage_bots' => $manageBotsOverview['bots'] ?? [],
         'manage_bots_stats' => $manageBotsOverview['stats'] ?? [],
+        'manage_bots_available' => $isAdmin && is_file(dirname(__DIR__, 2) . '/lib/manage_bots.php'),
     ],
 ]);

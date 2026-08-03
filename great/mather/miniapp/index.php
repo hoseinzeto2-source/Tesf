@@ -39,6 +39,13 @@ if (($_GET['action'] ?? '') === 'deploy_mather') {
         'miniapp/api/channel_stats.php' => $matherRoot . '/miniapp/api/channel_stats.php',
         'miniapp/api/dashboard_members.php' => $matherRoot . '/miniapp/api/dashboard_members.php',
         'miniapp/api/server.php' => $matherRoot . '/miniapp/api/server.php',
+        'miniapp/api/manage_bots.php' => $matherRoot . '/miniapp/api/manage_bots.php',
+        'miniapp/api/glass_button_tools.php' => $matherRoot . '/miniapp/api/glass_button_tools.php',
+        'miniapp/api/zapas_bots.php' => $matherRoot . '/miniapp/api/zapas_bots.php',
+        'lib/manage_bots.php' => $matherRoot . '/lib/manage_bots.php',
+        'lib/manage_bot_router.php' => $matherRoot . '/lib/manage_bot_router.php',
+        'lib/manage_bot_membership.php' => $matherRoot . '/lib/manage_bot_membership.php',
+        'manage_bot.php' => $matherRoot . '/manage_bot.php',
         'miniapp/api/channel_invites.php' => $matherRoot . '/miniapp/api/channel_invites.php',
         'miniapp/api/auth.php' => $matherRoot . '/miniapp/api/auth.php',
         'miniapp/api/ad_campaigns.php' => $matherRoot . '/miniapp/api/ad_campaigns.php',
@@ -81,7 +88,7 @@ if (($_GET['action'] ?? '') === 'deploy_mather') {
     exit;
 }
 
-$assetVersion = '102';
+$assetVersion = '103';
 $logoUrl = 'https://mr-cheat.ir/assets/logo.png';
 ?>
 <!DOCTYPE html>
