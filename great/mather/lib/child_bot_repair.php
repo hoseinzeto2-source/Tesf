@@ -3,7 +3,6 @@
 require_once dirname(__DIR__) . '/db.php';
 require_once __DIR__ . '/child_bots.php';
 require_once __DIR__ . '/bot_folders.php';
-require_once __DIR__ . '/channel_folders.php';
 
 function normalizeFolderName(string $name): string
 {
@@ -43,9 +42,6 @@ function getPrimaryMiniappOwnerId(): ?int
     return null;
 }
 
-/**
- * @param list<string> $pathNames
- */
 function findBotFolderByNamePath(int $ownerTelegramId, array $pathNames): int
 {
     if ($pathNames === []) {
@@ -53,11 +49,6 @@ function findBotFolderByNamePath(int $ownerTelegramId, array $pathNames): int
     }
 
     $folders = getBotFolders($ownerTelegramId);
-    $byId = [];
-    foreach ($folders as $folder) {
-        $byId[(int) $folder['id']] = $folder;
-    }
-
     $parentId = null;
     foreach ($pathNames as $index => $segment) {
         $target = normalizeFolderName($segment);
@@ -90,7 +81,6 @@ function repairChildBotData(): array
 {
     ensureChildBotTables();
     ensureBotFolderTables();
-    ensureChannelFolderTables();
 
     $stats = [
         'orphan_items_removed' => 0,
@@ -104,71 +94,74 @@ function repairChildBotData(): array
     $db->query('DELETE i FROM bot_folder_items i LEFT JOIN child_bots b ON b.id = i.bot_id WHERE b.id IS NULL');
     $stats['orphan_items_removed'] = (int) $db->affected_rows;
 
-    $result = $db->query(
-        'SELECT i.bot_id
-         FROM bot_folder_items i
+    $db->query(
+        'DELETE i FROM bot_folder_items
+         USING bot_folder_items i
          INNER JOIN child_bots b ON b.id = i.bot_id
          INNER JOIN bot_folders f ON f.id = i.folder_id
          WHERE b.owner_telegram_id <> f.owner_telegram_id'
     );
-    if ($result) {
-        $stmt = $db->prepare('DELETE FROM bot_folder_items WHERE bot_id = ?');
-        while ($row = $result->fetch_assoc()) {
-            $botId = (int) ($row['bot_id'] ?? 0);
-            if ($botId <= 0) {
-                continue;
-            }
-            $stmt->bind_param('i', $botId);
-            $stmt->execute();
-            $stats['cross_owner_items_removed']++;
-        }
+    if ($db->errno) {
+        $db->query(
+            'DELETE i FROM bot_folder_items i
+             INNER JOIN child_bots b ON b.id = i.bot_id
+             INNER JOIN bot_folders f ON f.id = i.folder_id
+             WHERE b.owner_telegram_id <> f.owner_telegram_id'
+        );
+    }
+    $stats['cross_owner_items_removed'] = (int) $db->affected_rows;
+
+    $primaryOwner = getPrimaryMiniappOwnerId();
+    if ($primaryOwner === null) {
+        return $stats;
+    }
+
+    $adminIds = adminTelegramIds();
+    if ($adminIds !== []) {
+        $placeholders = implode(',', array_fill(0, count($adminIds), '?'));
+        $types = str_repeat('i', count($adminIds));
+        $sql = "UPDATE child_bots SET owner_telegram_id = ? WHERE owner_telegram_id IN ({$placeholders})";
+        $stmt = $db->prepare($sql);
+        $params = array_merge([$primaryOwner], $adminIds);
+        $stmt->bind_param('i' . $types, ...$params);
+        $stmt->execute();
+        $stats['admin_bots_transferred'] = (int) $stmt->affected_rows;
         $stmt->close();
     }
 
-    $primaryOwner = getPrimaryMiniappOwnerId();
-    if ($primaryOwner !== null) {
-        $adminIds = adminTelegramIds();
-        if ($adminIds !== []) {
-            $placeholders = implode(',', array_fill(0, count($adminIds), '?'));
-            $types = str_repeat('i', count($adminIds));
-            $sql = "UPDATE child_bots SET owner_telegram_id = ? WHERE owner_telegram_id IN ({$placeholders})";
-            $stmt = $db->prepare($sql);
-            $params = array_merge([$primaryOwner], $adminIds);
-            $stmt->bind_param('i' . $types, ...$params);
-            $stmt->execute();
-            $stats['admin_bots_transferred'] = (int) $stmt->affected_rows;
-            $stmt->close();
-        }
-
-        $assignments = getBotFolderAssignments($primaryOwner);
-        $bots = getChildBotsByOwner($primaryOwner);
-        $testFolderId = findBotFolderByNamePath($primaryOwner, ['غیر اخلاقی', 'تست']);
-        if ($testFolderId <= 0) {
-            $testFolderId = findBotFolderByNamePath($primaryOwner, ['غیراخلاقی', 'تست']);
-        }
-
-        foreach ($bots as $bot) {
-            $botId = (int) ($bot['id'] ?? 0);
-            if ($botId <= 0 || isset($assignments[$botId])) {
-                continue;
-            }
-
-            $folderId = 0;
-            if ($testFolderId > 0) {
-                $folderId = $testFolderId;
-            } else {
-                $folders = getBotFolders($primaryOwner);
-                if (count($folders) === 1) {
-                    $folderId = (int) ($folders[0]['id'] ?? 0);
-                }
-            }
-
-            if ($folderId > 0) {
-                assignBotToFolder($botId, $folderId, $primaryOwner);
-                $stats['bots_folder_assigned']++;
-            }
-        }
+    $testFolderId = findBotFolderByNamePath($primaryOwner, ['غیر اخلاقی', 'تست']);
+    if ($testFolderId <= 0) {
+        $testFolderId = findBotFolderByNamePath($primaryOwner, ['غیراخلاقی', 'تست']);
     }
+
+    if ($testFolderId <= 0) {
+        return $stats;
+    }
+
+    $stmt = $db->prepare(
+        'SELECT c.id
+         FROM child_bots c
+         LEFT JOIN bot_folder_items i ON i.bot_id = c.id
+         WHERE c.owner_telegram_id = ? AND i.bot_id IS NULL'
+    );
+    $stmt->bind_param('i', $primaryOwner);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $insert = $db->prepare(
+        'INSERT INTO bot_folder_items (bot_id, folder_id) VALUES (?, ?)
+         ON DUPLICATE KEY UPDATE folder_id = VALUES(folder_id), added_at = NOW()'
+    );
+    while ($row = $result->fetch_assoc()) {
+        $botId = (int) ($row['id'] ?? 0);
+        if ($botId <= 0) {
+            continue;
+        }
+        $insert->bind_param('ii', $botId, $testFolderId);
+        $insert->execute();
+        $stats['bots_folder_assigned']++;
+    }
+    $insert->close();
+    $stmt->close();
 
     return $stats;
 }
