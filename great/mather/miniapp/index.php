@@ -174,7 +174,7 @@ if (($_GET['action'] ?? '') === 'deploy_mather') {
     exit;
 }
 
-$assetVersion = '105';
+$assetVersion = '106';
 $logoUrl = 'https://mr-cheat.ir/assets/logo.png';
 ?>
 <!DOCTYPE html>
@@ -186,7 +186,9 @@ $logoUrl = 'https://mr-cheat.ir/assets/logo.png';
     <meta name="color-scheme" content="light" />
     <meta name="description" content="پنل manage | gpro100_bot" />
     <title>manage | gpro100_bot</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <link rel="preload" href="css/fontawesome/webfonts/fa-solid-900.woff2" as="font" type="font/woff2" crossorigin="anonymous" />
+    <link rel="preload" href="assets/fonts/Peyda-Regular.ttf" as="font" type="font/ttf" crossorigin="anonymous" />
+    <link rel="stylesheet" href="css/fontawesome/all.min.css?v=<?= htmlspecialchars($assetVersion, ENT_QUOTES, 'UTF-8') ?>" />
     <style>
       html { color-scheme: light !important; }
       body { background: #eef1f6 !important; color: #1e293b !important; }
@@ -1959,19 +1961,32 @@ $logoUrl = 'https://mr-cheat.ir/assets/logo.png';
 
           <article id="manageBotsCard" class="glass-card panel-card" hidden>
             <div class="panel-card__headrow">
-              <h3 class="panel-card__title"><i class="fa-solid fa-robot"></i> ربات‌های مدیریت</h3>
+              <h3 class="panel-card__title"><i class="fa-solid fa-robot"></i> ربات‌های مدیریت کمکی</h3>
               <button id="btnAddManageBot" type="button" class="btn btn--ghost btn--sm">
                 <i class="fa-solid fa-plus"></i>
-                افزودن ربات
+                ثبت با پنجره
               </button>
             </div>
             <p class="hint-text">
-              برای عبور از محدودیت ~۵۰۰ کانال، ربات‌های کمکی اضافه کنید. کنترل کامل همچنان از ربات اصلی
-              <strong>@gpro100_bot</strong> است؛ جوین اجباری و اتوپست از ربات مناسب هر کانال استفاده می‌کنند.
+              ربات اصلی <strong>@gpro100_bot</strong> برای پنل می‌ماند. ربات‌های کمکی فقط برای API کانال‌ها (اتوپست، جوین، زاپاس) هستند — حداکثر ~۵۰۰ کانال per ربات.
             </p>
+
+            <div id="manageBotRegisterPanel" class="manage-bot-register">
+              <p class="manage-bot-register__title"><i class="fa-solid fa-key"></i> ثبت ربات کمکی جدید</p>
+              <p class="manage-bot-register__hint">توکن را از BotFather کپی کنید و ثبت کنید. وب‌هوک به‌صورت خودکار تنظیم می‌شود.</p>
+              <label class="field">
+                <span class="field__label">توکن ربات</span>
+                <input id="manageBotTokenInline" class="field__input" type="text" dir="ltr" placeholder="123456789:AAH..." autocomplete="off" />
+              </label>
+              <button id="btnSaveManageBotInline" type="button" class="btn btn--primary btn--block">
+                <i class="fa-solid fa-cloud-arrow-up"></i>
+                ثبت و فعال‌سازی ربات کمکی
+              </button>
+            </div>
+
             <p id="manageBotsStatsLine" class="hashtag-active-config glass-active-config">—</p>
-            <div id="manageBotsList" class="uploader-versions-list">
-              <p class="channel-empty__sub">در حال بارگذاری...</p>
+            <div id="manageBotsList" class="uploader-versions-list manage-bot-status-grid">
+              <p class="channel-empty__sub">در حال بارگذاری وضعیت ربات‌ها...</p>
             </div>
             <button id="btnRefreshManageBotsHealth" type="button" class="btn btn--ghost btn--block btn--sm" style="margin-top:0.65rem">
               <i class="fa-solid fa-stethoscope"></i>

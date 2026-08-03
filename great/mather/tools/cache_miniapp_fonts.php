@@ -1,0 +1,52 @@
+<?php
+
+declare(strict_types=1);
+
+/**
+ * One-shot: cache Peyda fonts locally for faster miniapp loads.
+ * Open once: /great/mather/tools/cache_miniapp_fonts.php
+ */
+
+$root = dirname(__DIR__) . '/miniapp/assets/fonts';
+$sources = [
+    'Peyda-Regular.ttf' => 'https://mr-cheat.ir/assets/fonts/Peyda-Regular.ttf',
+    'Peyda-Bold.ttf' => 'https://mr-cheat.ir/assets/fonts/Peyda-Bold.ttf',
+    'Peyda-Black.ttf' => 'https://mr-cheat.ir/assets/fonts/Peyda-Black.ttf',
+];
+
+header('Content-Type: text/plain; charset=utf-8');
+
+if (!is_dir($root) && !mkdir($root, 0755, true) && !is_dir($root)) {
+    echo "mkdir_failed\n";
+    exit;
+}
+
+$written = [];
+$errors = [];
+foreach ($sources as $name => $url) {
+$ctx = stream_context_create([
+        'http' => ['timeout' => 15, 'header' => "User-Agent: gpro-font-cache/1.0\r\n"],
+        'ssl' => ['verify_peer' => true, 'verify_peer_name' => true],
+    ]);
+    $body = @file_get_contents($url, false, $ctx);
+    if ($body === false || $body === '') {
+        $errors[] = $name . ': download_failed';
+        continue;
+    }
+    if (file_put_contents($root . '/' . $name, $body) === false) {
+        $errors[] = $name . ': write_failed';
+        continue;
+    }
+    $written[] = $name;
+}
+
+echo 'written=' . count($written) . "\n";
+foreach ($written as $f) {
+    echo "+ {$f}\n";
+}
+if ($errors !== []) {
+    echo "errors=" . count($errors) . "\n";
+    foreach ($errors as $e) {
+        echo "! {$e}\n";
+    }
+}

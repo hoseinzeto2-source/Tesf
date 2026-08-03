@@ -8608,22 +8608,28 @@
     const card = document.getElementById("manageBotsCard");
     const list = document.getElementById("manageBotsList");
     const statsLine = document.getElementById("manageBotsStatsLine");
+    const registerPanel = document.getElementById("manageBotRegisterPanel");
     if (!card || !list) return;
 
     if (!server?.is_admin) {
-      card.hidden = true;
+      card.hidden = false;
+      if (registerPanel) registerPanel.hidden = true;
+      if (statsLine) statsLine.textContent = "دسترسی محدود";
+      list.innerHTML =
+        '<p class="channel-empty__sub">فقط ادمین اصلی می‌تواند ربات کمکی ثبت کند. اگر ادمین هستید، آیدی تلگرام خود را به پشتیبانی بدهید.</p>';
       return;
     }
 
     card.hidden = false;
+    if (registerPanel) registerPanel.hidden = false;
     const bots = server.manage_bots || [];
     const stats = server.manage_bots_stats || {};
 
     if (server.manage_bots_available === false) {
       if (statsLine) {
-        statsLine.textContent = "فایل‌های سرور هنوز به‌روز نشده — لیست زیر پس از آپلود کامل نمایش داده می‌شود.";
+        statsLine.textContent = "فایل‌های سرور هنوز به‌روز نشده.";
       }
-      list.innerHTML = `<p class="channel-empty__sub">بخش ربات‌های مدیریت در مینی‌اپ آماده است، اما فایل‌های <code>lib/manage_bots.php</code> روی هاست آپلود نشده‌اند. پس از آپلود، یک‌بار <code>install.php</code> را اجرا کنید.</p>`;
+      list.innerHTML = `<p class="channel-empty__sub">فایل <code>lib/manage_bots.php</code> روی هاست نیست. پس از آپلود، <code>install.php</code> را اجرا کنید.</p>`;
       return;
     }
 
@@ -8631,14 +8637,14 @@
       const suggested = stats.suggested_bot_username
         ? `@${stats.suggested_bot_username}`
         : stats.all_bots_at_capacity
-          ? "همه ربات‌ها پر هستند — یک ربات کمکی جدید اضافه کنید"
+          ? "همه ربات‌ها پر — ربات کمکی جدید بسازید"
           : "";
-      const base = `${stats.active_bot_count || bots.length} ربات · ${stats.total_channel_bindings || 0} کانال متصل · حداکثر ${stats.channel_limit || 500} کانال per ربات`;
-      statsLine.textContent = suggested ? `${base} · برای کانال جدید: ${suggested}` : base;
+      const base = `${stats.active_bot_count || bots.length} ربات · ${stats.total_channel_bindings || 0} کانال · سقف ${stats.channel_limit || 500}/ربات`;
+      statsLine.textContent = suggested ? `${base} · کانال جدید: ${suggested}` : base;
     }
 
     if (!bots.length) {
-      list.innerHTML = `<p class="channel-empty__sub">فقط ربات اصلی فعال است — برای کانال‌های بیشتر «افزودن ربات» را بزنید.</p>`;
+      list.innerHTML = `<p class="channel-empty__sub">هنوز فقط ربات اصلی ثبت شده — توکن ربات کمکی را بالا وارد کنید.</p>`;
       return;
     }
 
@@ -8647,21 +8653,21 @@
         const username = bot.bot_username ? `@${escapeHtml(bot.bot_username)}` : "ربات";
         const name = bot.bot_name ? escapeHtml(bot.bot_name) : username;
         const primaryBadge = bot.is_primary
-          ? '<span class="version-badge version-badge--default">اصلی</span>'
-          : "";
-        const healthClass =
+          ? '<span class="version-badge version-badge--default">اصلی · پنل</span>'
+          : '<span class="version-badge">کمکی · API کانال</span>';
+        const healthChipClass =
           bot.health_status === "ok"
-            ? "version-badge--default"
-            : bot.near_capacity
-              ? "version-badge--warn"
-              : "version-badge--danger";
+            ? "manage-bot-status-chip--ok"
+            : bot.near_capacity || bot.at_capacity
+              ? "manage-bot-status-chip--warn"
+              : "manage-bot-status-chip--danger";
         const healthLabel =
           bot.health_status === "ok"
             ? "سالم"
-            : bot.health_message || bot.health_status || "مشکل";
+            : bot.health_message || bot.health_status || "نیاز به بررسی";
         const capacity = `${formatNumber(bot.channel_count || 0)} / ${formatNumber(bot.channel_limit || 500)} کانال`;
         const capacityWarn = bot.near_capacity
-          ? '<p class="uploader-version-row__meta manage-bot-row__warn"><i class="fa-solid fa-triangle-exclamation"></i> نزدیک به سقف ۵۰۰ کانال</p>'
+          ? '<p class="uploader-version-row__meta manage-bot-row__warn"><i class="fa-solid fa-triangle-exclamation"></i> نزدیک سقف ۵۰۰ کانال</p>'
           : bot.at_capacity
             ? '<p class="uploader-version-row__meta manage-bot-row__warn"><i class="fa-solid fa-ban"></i> ظرفیت پر شده</p>'
             : "";
@@ -8671,7 +8677,7 @@
           <div class="uploader-version-row__head">
             <strong class="uploader-version-row__title">${name}</strong>
             ${primaryBadge}
-            <span class="version-badge ${healthClass}">${escapeHtml(healthLabel)}</span>
+            <span class="manage-bot-status-chip ${healthChipClass}"><i class="fa-solid fa-heart-pulse"></i> ${escapeHtml(healthLabel)}</span>
           </div>
           <p class="uploader-version-row__meta" dir="ltr">${username}</p>
           <p class="uploader-version-row__meta">${capacity}</p>
@@ -8679,7 +8685,7 @@
           <div class="manage-bot-row__actions">
             ${
               bot.is_primary
-                ? ""
+                ? '<span class="manage-bot-status-chip manage-bot-status-chip--ok"><i class="fa-solid fa-link"></i> webhook: index.php</span>'
                 : `<button type="button" class="btn btn--ghost btn--sm" data-refresh-manage-bot="${bot.id}"><i class="fa-solid fa-rotate"></i> بررسی</button>
                    <button type="button" class="btn btn--ghost btn--sm btn--danger" data-remove-manage-bot="${bot.id}"><i class="fa-solid fa-trash"></i> حذف</button>`
             }
@@ -8754,28 +8760,46 @@
     if (modal) modal.hidden = true;
   }
 
+  async function submitManageBotToken(token, button) {
+    const trimmed = (token || "").trim();
+    if (!trimmed) {
+      showToast("توکن ربات را وارد کنید", { type: "warning" });
+      return false;
+    }
+    if (button) button.disabled = true;
+    try {
+      await manageBotsApi({ action: "add_bot", token: trimmed });
+      closeManageBotModal();
+      const inline = document.getElementById("manageBotTokenInline");
+      if (inline) inline.value = "";
+      await loadServerTab();
+      showToast("ربات کمکی ثبت و وب‌هوک تنظیم شد", { type: "success" });
+      return true;
+    } catch (e) {
+      showToast(manageBotErrorMessage(e?.message), { type: "error", duration: 4500 });
+      return false;
+    } finally {
+      if (button) button.disabled = false;
+    }
+  }
+
   function initManageBotsUi() {
     document.getElementById("btnAddManageBot")?.addEventListener("click", openManageBotModal);
     document.querySelectorAll("[data-close-manage-bot]").forEach((el) => {
       el.addEventListener("click", closeManageBotModal);
     });
     document.getElementById("btnSaveManageBot")?.addEventListener("click", async () => {
-      const token = document.getElementById("manageBotTokenInput")?.value?.trim() || "";
-      if (!token) {
-        showToast("توکن ربات را وارد کنید", { type: "warning" });
-        return;
-      }
-      const btn = document.getElementById("btnSaveManageBot");
-      if (btn) btn.disabled = true;
-      try {
-        await manageBotsApi({ action: "add_bot", token });
-        closeManageBotModal();
-        await loadServerTab();
-        showToast("ربات مدیریت اضافه و وب‌هوک تنظیم شد", { type: "success" });
-      } catch (e) {
-        showToast(manageBotErrorMessage(e?.message), { type: "error", duration: 4500 });
-      } finally {
-        if (btn) btn.disabled = false;
+      const token = document.getElementById("manageBotTokenInput")?.value || "";
+      await submitManageBotToken(token, document.getElementById("btnSaveManageBot"));
+    });
+    document.getElementById("btnSaveManageBotInline")?.addEventListener("click", async () => {
+      const token = document.getElementById("manageBotTokenInline")?.value || "";
+      await submitManageBotToken(token, document.getElementById("btnSaveManageBotInline"));
+    });
+    document.getElementById("manageBotTokenInline")?.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        document.getElementById("btnSaveManageBotInline")?.click();
       }
     });
     document.getElementById("btnRefreshManageBotsHealth")?.addEventListener("click", async () => {

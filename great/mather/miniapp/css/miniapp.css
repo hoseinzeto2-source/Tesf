@@ -1,6 +1,7 @@
 @font-face {
  font-family: "Peyda";
- src: url("https://mr-cheat.ir/assets/fonts/Peyda-Regular.ttf") format("truetype");
+ src: url("../assets/fonts/Peyda-Regular.ttf") format("truetype"),
+  url("https://mr-cheat.ir/assets/fonts/Peyda-Regular.ttf") format("truetype");
  font-weight: 400;
  font-style: normal;
  font-display: swap;
@@ -8,7 +9,8 @@
 
 @font-face {
  font-family: "Peyda";
- src: url("https://mr-cheat.ir/assets/fonts/Peyda-Bold.ttf") format("truetype");
+ src: url("../assets/fonts/Peyda-Bold.ttf") format("truetype"),
+  url("https://mr-cheat.ir/assets/fonts/Peyda-Bold.ttf") format("truetype");
  font-weight: 700;
  font-style: normal;
  font-display: swap;
@@ -16,7 +18,8 @@
 
 @font-face {
  font-family: "Peyda";
- src: url("https://mr-cheat.ir/assets/fonts/Peyda-Black.ttf") format("truetype");
+ src: url("../assets/fonts/Peyda-Black.ttf") format("truetype"),
+  url("https://mr-cheat.ir/assets/fonts/Peyda-Black.ttf") format("truetype");
  font-weight: 900;
  font-style: normal;
  font-display: swap;
@@ -4526,4 +4529,59 @@ a:focus-visible,
 
 .manage-bot-row__warn {
  color: #b45309;
+}
+
+.manage-bot-register {
+ display: grid;
+ gap: 0.65rem;
+ margin-bottom: 0.85rem;
+ padding: 0.85rem;
+ border-radius: var(--dash-radius-sm);
+ border: 1px dashed rgba(59, 130, 246, 0.35);
+ background: rgba(59, 130, 246, 0.05);
+}
+
+.manage-bot-register__title {
+ margin: 0 0 0.15rem;
+ font-size: 0.95rem;
+ font-weight: 700;
+ color: var(--dash-text);
+}
+
+.manage-bot-register__hint {
+ margin: 0;
+ font-size: 0.82rem;
+ line-height: 1.6;
+ color: var(--dash-muted);
+}
+
+.manage-bot-status-grid {
+ display: grid;
+ gap: 0.55rem;
+}
+
+.manage-bot-status-chip {
+ display: inline-flex;
+ align-items: center;
+ gap: 0.35rem;
+ font-size: 0.78rem;
+ padding: 0.2rem 0.55rem;
+ border-radius: 999px;
+ background: var(--dash-fill);
+ color: var(--dash-muted);
+}
+
+.manage-bot-status-chip--ok {
+ background: rgba(5, 150, 105, 0.12);
+ color: #047857;
+}
+
+.manage-bot-status-chip--warn {
+ background: rgba(217, 119, 6, 0.12);
+ color: #b45309;
+}
+
+.manage-bot-status-chip--danger {
+ background: rgba(220, 38, 38, 0.1);
+ color: #b91c1c;
 }
