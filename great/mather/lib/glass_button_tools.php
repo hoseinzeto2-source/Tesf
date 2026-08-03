@@ -228,6 +228,48 @@ function buildGlassButtonDelivery(
 }
 
 /**
+ * Pick the best channel-folder id for glass-button settings when posting to a channel.
+ */
+function resolveGlassButtonFolderForAutoPostChannel(int $ownerTelegramId, int $channelChatId, int $sessionRootFolderId): int
+{
+    if (!function_exists('getChannelFolderIdsForChat')) {
+        require_once __DIR__ . '/hashtag_tools.php';
+    }
+
+    $channelFolderIds = getChannelFolderIdsForChat($channelChatId);
+    if ($channelFolderIds === []) {
+        return $sessionRootFolderId;
+    }
+
+    $sessionScope = function_exists('getChannelFolderTreeIds')
+        ? getChannelFolderTreeIds($sessionRootFolderId)
+        : [$sessionRootFolderId];
+    $scopeMap = array_flip($sessionScope);
+
+    $enabledMatch = 0;
+    foreach ($channelFolderIds as $folderId) {
+        if (!isset($scopeMap[$folderId])) {
+            continue;
+        }
+        $settings = getGlassButtonSettingsForFolder($ownerTelegramId, $folderId);
+        if (!empty($settings['is_enabled'])) {
+            $enabledMatch = $folderId;
+        }
+    }
+    if ($enabledMatch > 0) {
+        return $enabledMatch;
+    }
+
+    foreach ($channelFolderIds as $folderId) {
+        if (isset($scopeMap[$folderId])) {
+            return $folderId;
+        }
+    }
+
+    return $sessionRootFolderId;
+}
+
+/**
  * @return array<string, mixed>
  */
 function saveGlassButtonFolderSettings(int $ownerTelegramId, int $channelFolderId, array $payload): array

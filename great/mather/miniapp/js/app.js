@@ -4796,6 +4796,22 @@
     return data;
   }
 
+  function autoPostScheduleErrorMessage(code) {
+    const map = {
+      schedule_not_found: "پست خودکار یافت نشد",
+      schedule_inactive: "پست خودکار متوقف است — ابتدا فعالش کنید",
+      no_media: "محتوایی برای ارسال انتخاب نشده",
+      no_channels: "کانالی در این سشن برای ارسال نیست",
+      bots_missing: "ربات محافظ یا آپلودر در سشن نیست",
+      bots_pick_failed: "انتخاب ربات از استخر ناموفق بود",
+      cache_failed: "کش محتوا برای آپلودر ناموفق بود",
+      channel_post_failed: "ارسال به کانال ناموفق بود — دسترسی ربات مدیریت را بررسی کنید",
+      send_failed: "ارسال ناموفق بود",
+      request_failed: "خطا در ارتباط با سرور",
+    };
+    return map[code] || map.send_failed;
+  }
+
   function renderAutoPostScheduleList(schedules) {
     const list = document.getElementById("autoPostScheduleList");
     if (!list) return;
@@ -4862,16 +4878,31 @@
     list.querySelectorAll("[data-ap-run-now]").forEach((btn) => {
       btn.addEventListener("click", async () => {
         const id = Number(btn.dataset.apRunNow);
+        const originalLabel = btn.textContent;
         btn.disabled = true;
+        btn.textContent = "در حال ارسال…";
         try {
           const data = await autoPostScheduleApi({ action: "run_now", schedule_id: id });
+          const result = data?.result || {};
+          if (!result.ok && (result.posted ?? 0) <= 0) {
+            throw new Error(result.error || "send_failed");
+          }
           await fetchAutoPostSchedules(state.activePostSessionId);
-          const posted = data?.result?.posted ?? 0;
-          showToast(posted > 0 ? `ارسال شد — ${posted} کانال` : "ارسال انجام شد", { type: "success" });
-        } catch (_) {
-          showToast("ارسال ناموفق بود", { type: "error" });
+          const posted = Number(result.posted ?? 0);
+          const failed = Number(result.failed ?? 0);
+          if (posted > 0) {
+            showToast(
+              failed > 0 ? `ارسال شد — ${posted} کانال · ${failed} ناموفق` : `ارسال شد — ${posted} کانال`,
+              { type: "success" }
+            );
+          } else {
+            showToast("ارسال انجام شد", { type: "success" });
+          }
+        } catch (error) {
+          showToast(autoPostScheduleErrorMessage(error?.message || "send_failed"), { type: "error" });
         } finally {
           btn.disabled = false;
+          btn.textContent = originalLabel;
         }
       });
     });

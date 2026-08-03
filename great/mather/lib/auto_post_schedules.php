@@ -822,7 +822,7 @@ function getSessionChannelsForPost(int $ownerTelegramId, int $sessionId): array
 
     $inFolders = implode(',', array_map('intval', $folderIds));
     $result = $db->query(
-        "SELECT c.chat_id, c.title, c.username
+        "SELECT c.chat_id, c.title, c.username, i.folder_id AS channel_folder_id
          FROM channel_folder_items i
          INNER JOIN bot_channels c ON c.chat_id = i.chat_id
          WHERE i.folder_id IN ({$inFolders}) AND c.is_active = 1
@@ -1621,20 +1621,24 @@ function ensureUploaderCanReceiveViaManageBot(int $groupChatId, array $uploaderB
     unset($groupChatId, $uploaderBot);
 }
 
-function runAutoPostSchedule(int $scheduleId): array
+function runAutoPostSchedule(int $scheduleId, bool $manualRun = false): array
 {
     ensureAutoPostScheduleTables();
     ensureChildBotHealthColumns();
 
     $db = getDb();
-    $stmt = $db->prepare('SELECT * FROM auto_post_schedules WHERE id = ? AND status = \'active\' LIMIT 1');
+    if ($manualRun) {
+        $stmt = $db->prepare('SELECT * FROM auto_post_schedules WHERE id = ? LIMIT 1');
+    } else {
+        $stmt = $db->prepare('SELECT * FROM auto_post_schedules WHERE id = ? AND status = \'active\' LIMIT 1');
+    }
     $stmt->bind_param('i', $scheduleId);
     $stmt->execute();
     $schedule = $stmt->get_result()->fetch_assoc();
     $stmt->close();
 
     if (!$schedule) {
-        return ['ok' => false, 'error' => 'schedule_not_found'];
+        return ['ok' => false, 'error' => $manualRun ? 'schedule_not_found' : 'schedule_inactive'];
     }
 
     $ownerId = (int) $schedule['owner_telegram_id'];
@@ -1717,6 +1721,16 @@ function runAutoPostSchedule(int $scheduleId): array
     }
 
     foreach ($channels as $channel) {
+        $channelFolderId = (int) ($channel['channel_folder_id'] ?? 0);
+        if ($channelFolderId <= 0) {
+            $channelFolderId = $sessionChannelFolderId;
+        }
+        $channelFolderId = resolveGlassButtonFolderForAutoPostChannel(
+            $ownerId,
+            (int) $channel['chat_id'],
+            $channelFolderId > 0 ? $channelFolderId : $sessionChannelFolderId
+        );
+
         $result = postAutoContentToChannel(
             $ownerId,
             (int) $channel['chat_id'],
@@ -1726,7 +1740,7 @@ function runAutoPostSchedule(int $scheduleId): array
             $contentLabel,
             (int) $mediaItem['chat_id'],
             (int) $mediaItem['message_id'],
-            $sessionChannelFolderId,
+            $channelFolderId,
             $scheduleId,
             0,
             (int) $uploader['id']

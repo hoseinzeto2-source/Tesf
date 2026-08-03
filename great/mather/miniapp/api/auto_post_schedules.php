@@ -99,7 +99,14 @@ try {
             if (!$schedule) {
                 jsonResponse(['ok' => false, 'error' => 'schedule_not_found'], 404);
             }
-            $result = runAutoPostSchedule($scheduleId);
+            $result = runAutoPostSchedule($scheduleId, true);
+            if (empty($result['ok'])) {
+                jsonResponse([
+                    'ok' => false,
+                    'error' => (string) ($result['error'] ?? 'send_failed'),
+                    'result' => $result,
+                ], 400);
+            }
             jsonResponse(['ok' => true, 'result' => $result]);
             break;
 
