@@ -1,7 +1,8 @@
 
 <?php
-ini_set('display_errors', 1);
-ini_set('display_startup_errors', 1);
+ini_set('display_errors', 0);
+ini_set('display_startup_errors', 0);
+ini_set('log_errors', 1);
 error_reporting(E_ALL);
 
 date_default_timezone_set('Africa/Cairo');
@@ -31,16 +32,45 @@ function cairo_to_tehran($datetime) {
 }
 
 // بارگذاری تنظیمات از .env یا env
+function load_env_file($path) {
+    if (!is_readable($path)) {
+        return false;
+    }
+    $env = [];
+    $lines = file($path, FILE_IGNORE_NEW_LINES);
+    if ($lines === false) {
+        return false;
+    }
+    foreach ($lines as $line) {
+        $line = trim($line);
+        if ($line === '' || $line[0] === '#' || $line[0] === ';') {
+            continue;
+        }
+        if (strpos($line, '=') === false) {
+            continue;
+        }
+        $parts = explode('=', $line, 2);
+        $key = trim($parts[0]);
+        $value = trim($parts[1]);
+        if ((strlen($value) >= 2 && (($value[0] === '"' && substr($value, -1) === '"') ||
+            ($value[0] === "'" && substr($value, -1) === "'")))) {
+            $value = substr($value, 1, -1);
+        }
+        $env[$key] = $value;
+    }
+    return $env;
+}
+
 $env_path_dot = __DIR__ . '/.env';
 $env_path_nodot = __DIR__ . '/env';
 $env = false;
 if (file_exists($env_path_dot)) {
-    $env = parse_ini_file($env_path_dot);
+    $env = load_env_file($env_path_dot);
     if ($env === false) {
         log_message("Failed to parse .env file at $env_path_dot");
     }
 } elseif (file_exists($env_path_nodot)) {
-    $env = parse_ini_file($env_path_nodot);
+    $env = load_env_file($env_path_nodot);
     if ($env === false) {
         log_message("Failed to parse env file at $env_path_nodot");
     }
@@ -52,18 +82,25 @@ if ($env === false) {
     die("Error: Configuration file not found or invalid. Create '.env' or 'env' next to bot.php.");
 }
 
-$bot_token = $env['BOT_TOKEN'] ?? '';
+$bot_token = trim($env['BOT_TOKEN'] ?? '');
+$bot_username = trim($env['BOT_USERNAME'] ?? '');
 $admins = isset($env['ADMINS']) ? array_filter(array_map('trim', explode(',', $env['ADMINS']))) : [];
-$bot_id = $env['BOT_ID'] ?? '';
+$bot_id = trim((string)($env['BOT_ID'] ?? ''));
+$webhook_url = trim($env['WEBHOOK_URL'] ?? '');
 $db_host = $env['DB_HOST'] ?? 'localhost';
 $db_database = $env['DB_DATABASE'] ?? '';
 $db_username = $env['DB_USERNAME'] ?? '';
 $db_password = $env['DB_PASSWORD'] ?? '';
 
+// اگر BOT_ID در .env نباشد، از توکن استخراج می‌شود (قسمت قبل از :)
+if ($bot_id === '' && preg_match('/^(\d+):/', $bot_token, $tokenMatch)) {
+    $bot_id = $tokenMatch[1];
+}
+
 // بررسی مقادیر ضروری
-if (empty($bot_token) || empty($db_database) || empty($db_username)) {
+if (empty($bot_token) || empty($bot_id) || empty($db_database) || empty($db_username)) {
     log_message("Missing required .env variables");
-    die("Error: Missing required .env variables (BOT_TOKEN, DB_DATABASE, DB_USERNAME)");
+    die("Error: Missing required .env variables (BOT_TOKEN, BOT_ID, DB_DATABASE, DB_USERNAME)");
 }
 
 // اتصال به دیتابیس
@@ -783,7 +820,7 @@ if ($step == 'add_ch') {
         'chat_id' => $text,
         'user_id' => $bot_id
     ]);
-    if ($chat_member === false || !isset($chat_member['result']) || $chat_member['result']['status'] !== 'administrator') {
+    if ($chat_member === false || !isset($chat_member['result']['status']) || !in_array($chat_member['result']['status'], ['administrator', 'creator'], true)) {
         send_message($from_id, "❌ ربات در این کانال/گروه ادمین نیست.");
         log_message("Bot not admin in chat $text for user $from_id");
         http_response_code(200);
@@ -791,8 +828,8 @@ if ($step == 'add_ch') {
     }
     $stmt = $pdo->query("SELECT channels FROM options WHERE id = 1");
     $channels = json_decode($stmt->fetchColumn() ?: '[]', true);
-    if (!in_array($text, $channels)) {
-        $channels[] = $text;
+    if (!in_array((string)$text, array_map('strval', $channels), true)) {
+        $channels[] = (string)$text;
         $stmt = $pdo->prepare("UPDATE options SET channels = ? WHERE id = 1");
         $result = $stmt->execute([json_encode($channels)]);
         if ($result) {
@@ -819,7 +856,7 @@ if ($text == '➖ حذف کانال یا گروه') {
 if ($step == 'remove_ch') {
     $stmt = $pdo->query("SELECT channels FROM options WHERE id = 1");
     $channels = json_decode($stmt->fetchColumn() ?: '[]', true);
-    if (!in_array($text, $channels)) {
+    if (!in_array((string)$text, array_map('strval', $channels), true)) {
         send_message($from_id, "❌ این آیدی در لیست کانال‌ها وجود ندارد.");
         log_message("Chat ID $text not found for removal by user $from_id");
         http_response_code(200);
