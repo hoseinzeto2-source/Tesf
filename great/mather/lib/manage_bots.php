@@ -74,6 +74,49 @@ function buildManageBotWebhookUrl(string $webhookKey): string
     return manageBotsBaseUrl() . '/manage_bot.php?key=' . urlencode($webhookKey);
 }
 
+function buildManageBotWebhookUrlForRow(array $row): string
+{
+    if ((int) ($row['is_primary'] ?? 0) === 1) {
+        return manageBotsBaseUrl() . '/index.php';
+    }
+
+    return buildManageBotWebhookUrl((string) ($row['webhook_key'] ?? ''));
+}
+
+/**
+ * @return array{synced: list<int>, errors: list<int>}
+ */
+function syncAllManageBotWebhooks(): array
+{
+    ensureManageBotTables();
+    seedPrimaryManageBotFromConfig();
+
+    $synced = [];
+    $errors = [];
+    $db = getDb();
+    $result = $db->query('SELECT * FROM manage_bots WHERE status = "active"');
+    if (!$result) {
+        return ['synced' => [], 'errors' => []];
+    }
+
+    while ($row = $result->fetch_assoc()) {
+        $id = (int) ($row['id'] ?? 0);
+        $token = trim((string) ($row['bot_token'] ?? ''));
+        if ($id <= 0 || $token === '') {
+            continue;
+        }
+
+        $url = buildManageBotWebhookUrlForRow($row);
+        if (setManageBotWebhook($token, $url)) {
+            $synced[] = $id;
+        } else {
+            $errors[] = $id;
+        }
+    }
+
+    return ['synced' => $synced, 'errors' => $errors];
+}
+
 function manageBotAllowedUpdates(): array
 {
     return [
@@ -168,7 +211,7 @@ function formatManageBotRow(array $row): array
         'health_status' => (string) ($row['health_status'] ?? 'ok'),
         'health_message' => $row['health_message'] ?? null,
         'last_health_check' => $row['last_health_check'] ?? null,
-        'webhook_url' => buildManageBotWebhookUrl((string) ($row['webhook_key'] ?? '')),
+        'webhook_url' => buildManageBotWebhookUrlForRow($row),
     ];
 }
 
@@ -619,7 +662,10 @@ function refreshManageBotHealth(int $manageBotId): array
     $stmt->close();
 
     if ($health === 'webhook_missing' || $health === 'webhook_error') {
-        setManageBotWebhook($token, buildManageBotWebhookUrl((string) ($bot['webhook_key'] ?? '')));
+        setManageBotWebhook($token, buildManageBotWebhookUrlForRow([
+            'is_primary' => !empty($bot['is_primary']) ? 1 : 0,
+            'webhook_key' => (string) ($bot['webhook_key'] ?? ''),
+        ]));
     }
 
     return [
@@ -642,6 +688,8 @@ function getManageBotsOverview(): array
         }
     }
 
+    $suggested = pickManageBotForNewChannel();
+
     return [
         'bots' => $bots,
         'stats' => [
@@ -649,6 +697,9 @@ function getManageBotsOverview(): array
             'active_bot_count' => $activeCount,
             'total_channel_bindings' => $totalChannels,
             'channel_limit' => MANAGE_BOT_CHANNEL_LIMIT,
+            'suggested_bot_username' => (string) ($suggested['bot_username'] ?? ''),
+            'suggested_bot_name' => (string) ($suggested['bot_name'] ?? ''),
+            'all_bots_at_capacity' => $suggested === null,
         ],
     ];
 }

@@ -97,6 +97,7 @@ SQL;
     ensureManageBotTables();
     seedPrimaryManageBotFromConfig();
     $manageBotsBound = backfillPrimaryManageBotBindings();
+    $manageBotWebhooks = syncAllManageBotWebhooks();
     require_once __DIR__ . '/lib/channel_profile.php';
     require_once __DIR__ . '/lib/explorer_pins.php';
     ensureAllExplorerPinColumns();
@@ -108,6 +109,9 @@ SQL;
     }
     if ($manageBotsBound > 0) {
         echo ' Manage bot bindings: ' . $manageBotsBound;
+    }
+    if (!empty($manageBotWebhooks['synced'])) {
+        echo ' Manage bot webhooks: ' . count($manageBotWebhooks['synced']);
     }
 
     if (!empty($_GET['deploy_miniapp'])) {

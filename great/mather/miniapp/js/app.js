@@ -8628,7 +8628,13 @@
     }
 
     if (statsLine) {
-      statsLine.textContent = `${stats.active_bot_count || bots.length} ربات · ${stats.total_channel_bindings || 0} کانال متصل · حداکثر ${stats.channel_limit || 500} کانال per ربات`;
+      const suggested = stats.suggested_bot_username
+        ? `@${stats.suggested_bot_username}`
+        : stats.all_bots_at_capacity
+          ? "همه ربات‌ها پر هستند — یک ربات کمکی جدید اضافه کنید"
+          : "";
+      const base = `${stats.active_bot_count || bots.length} ربات · ${stats.total_channel_bindings || 0} کانال متصل · حداکثر ${stats.channel_limit || 500} کانال per ربات`;
+      statsLine.textContent = suggested ? `${base} · برای کانال جدید: ${suggested}` : base;
     }
 
     if (!bots.length) {

@@ -1335,7 +1335,7 @@ function cacheContentForUploaderBot(
         return $existing;
     }
 
-    $manageToken = manageBotToken($channelChatId);
+    $manageToken = manageBotToken(0);
     if ($manageToken === '') {
         return null;
     }

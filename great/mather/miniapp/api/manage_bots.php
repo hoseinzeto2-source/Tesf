@@ -57,6 +57,15 @@ try {
             jsonResponse(['ok' => true, 'results' => $results, ...getManageBotsOverview()]);
             break;
 
+        case 'suggest_bot':
+            $suggested = pickManageBotForNewChannel();
+            jsonResponse([
+                'ok' => true,
+                'suggested' => $suggested,
+                ...getManageBotsOverview(),
+            ]);
+            break;
+
         default:
             jsonResponse(['ok' => false, 'error' => 'unknown_action'], 400);
     }
