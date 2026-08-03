@@ -6407,6 +6407,29 @@
     renderGlassButtonPreview(previewSetting);
   }
 
+  function showZapasTab(tab) {
+    state.zapasTab = tab;
+    const panels = {
+      overview: document.getElementById("zapasPanelOverview"),
+      bots: document.getElementById("zapasPanelBots"),
+      folders: document.getElementById("zapasPanelFolders"),
+      history: document.getElementById("zapasPanelHistory"),
+    };
+    Object.entries(panels).forEach(([name, el]) => {
+      if (!el) return;
+      if (name === tab) {
+        el.removeAttribute("hidden");
+        el.classList.add("is-active");
+      } else {
+        el.setAttribute("hidden", "");
+        el.classList.remove("is-active");
+      }
+    });
+    document.querySelectorAll("[data-zapas-tab]").forEach((btn) => {
+      btn.classList.toggle("is-active", btn.dataset.zapasTab === tab);
+    });
+  }
+
   function renderZapasDetail(data) {
     const stats = data?.stats || {};
     setText("zapasDetailMeta", `${stats.standby_count || 0} آماده · ${stats.replacement_count || 0} جایگزینی`);
@@ -6481,6 +6504,7 @@
       detail?.classList.add("is-active");
       bottomNav?.setAttribute("hidden", "hidden");
       renderZapasDetail(data);
+      showZapasTab(state.zapasTab || "overview");
       tg?.HapticFeedback?.selectionChanged();
     } catch (_) {
       showToast("بارگذاری زاپاس ناموفق بود", { type: "error" });
@@ -6491,6 +6515,7 @@
     const detail = document.getElementById("screenZapasDetail");
     detail?.setAttribute("hidden", "");
     detail?.classList.remove("is-active");
+    state.zapasTab = "overview";
     screens.channels?.classList.add("is-active");
     bottomNav?.removeAttribute("hidden");
   }
@@ -6505,6 +6530,7 @@
       await zapasBotsApi({ action: "add_bot", token });
       document.getElementById("zapasBotToken").value = "";
       await reloadZapasTools();
+      showZapasTab("bots");
       showToast("ربات زاپاس اضافه شد", { type: "success" });
     } catch (e) {
       showToast(e?.message === "invalid_token" ? "توکن نامعتبر است" : "افزودن ناموفق بود", { type: "error" });
@@ -6515,6 +6541,7 @@
     try {
       await zapasBotsApi({ action: "set_binding", channel_folder_id: folderId, enabled: true });
       await reloadZapasTools();
+      showZapasTab("folders");
       showToast("پوشه برای زاپاس فعال شد", { type: "success" });
     } catch (_) {
       showToast("فعال‌سازی ناموفق بود", { type: "error" });
@@ -9749,8 +9776,15 @@
       closeZapasDetail();
       tg?.HapticFeedback?.selectionChanged();
     });
+    document.querySelectorAll("[data-zapas-tab]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        showZapasTab(btn.dataset.zapasTab || "overview");
+        tg?.HapticFeedback?.selectionChanged();
+      });
+    });
     document.getElementById("btnAddZapasBot")?.addEventListener("click", addZapasBotFromForm);
     document.getElementById("btnZapasRunCheck")?.addEventListener("click", runZapasHealthCheck);
+    document.getElementById("btnZapasRunCheckOverview")?.addEventListener("click", runZapasHealthCheck);
     document.getElementById("btnZapasAddFolder")?.addEventListener("click", () => {
       const folders = state.cache?.channels?.folders || [];
       if (!folders.length) {

@@ -182,7 +182,7 @@ if (($_GET['action'] ?? '') === 'deploy_mather') {
     exit;
 }
 
-$assetVersion = '109';
+$assetVersion = '110';
 $logoUrl = 'https://mr-cheat.ir/assets/logo.png';
 ?>
 <!DOCTYPE html>
@@ -1597,7 +1597,27 @@ $logoUrl = 'https://mr-cheat.ir/assets/logo.png';
               </div>
             </div>
           </header>
-          <div class="channel-panel is-active">
+
+          <nav class="channel-subnav channel-subnav--four" aria-label="بخش‌های زاپاس">
+            <button type="button" class="channel-subnav__btn is-active" data-zapas-tab="overview">
+              <i class="fa-solid fa-gauge-high"></i>
+              <span>نگاه کلی</span>
+            </button>
+            <button type="button" class="channel-subnav__btn" data-zapas-tab="bots">
+              <i class="fa-solid fa-robot"></i>
+              <span>ربات‌ها</span>
+            </button>
+            <button type="button" class="channel-subnav__btn" data-zapas-tab="folders">
+              <i class="fa-solid fa-folder-tree"></i>
+              <span>پوشه‌ها</span>
+            </button>
+            <button type="button" class="channel-subnav__btn" data-zapas-tab="history">
+              <i class="fa-solid fa-clock-rotate-left"></i>
+              <span>تاریخچه</span>
+            </button>
+          </nav>
+
+          <div id="zapasPanelOverview" class="channel-panel is-active">
             <div class="stats-grid">
               <article class="stat-card">
                 <span class="stat-card__label">آماده</span>
@@ -1612,6 +1632,24 @@ $logoUrl = 'https://mr-cheat.ir/assets/logo.png';
                 <strong id="zapasStatPosts" class="stat-card__value">—</strong>
               </article>
             </div>
+            <article class="glass-card panel-card">
+              <h3 class="panel-card__title"><i class="fa-solid fa-circle-info"></i> نحوه کار زاپاس</h3>
+              <p class="hint-text">
+                ربات‌های زاپاس در استخر آماده نگه داشته می‌شوند. وقتی ربات محافظ از کار بیفتد یا حذف شود،
+                یک ربات زاپاس جایگزین می‌شود و لینک‌های پست‌های قبلی کانال به‌روزرسانی می‌شوند.
+              </p>
+              <p class="hint-text">
+                <i class="fa-solid fa-folder-tree"></i>
+                اگر پوشه خاصی انتخاب نشود، زاپاس برای همه پوشه‌های کانال فعال است.
+              </p>
+              <button id="btnZapasRunCheckOverview" type="button" class="btn btn--ghost btn--sm panel-card__action">
+                <i class="fa-solid fa-rotate"></i>
+                بررسی جایگزینی
+              </button>
+            </article>
+          </div>
+
+          <div id="zapasPanelBots" class="channel-panel" hidden>
             <article class="glass-card panel-card">
               <h3 class="panel-card__title"><i class="fa-solid fa-plus"></i> افزودن ربات زاپاس</h3>
               <p class="hint-text">فقط توکن ربات را وارد کنید — نوع ربات خودکار هنگام جایگزینی تعیین می‌شود.</p>
@@ -1632,6 +1670,9 @@ $logoUrl = 'https://mr-cheat.ir/assets/logo.png';
               </div>
               <div id="zapasBotsList" class="hashtag-configs-list"></div>
             </article>
+          </div>
+
+          <div id="zapasPanelFolders" class="channel-panel" hidden>
             <article class="glass-card panel-card">
               <div class="panel-card__head-row">
                 <h3 class="panel-card__title"><i class="fa-solid fa-folder-tree"></i> پوشه‌های فعال</h3>
@@ -1642,6 +1683,9 @@ $logoUrl = 'https://mr-cheat.ir/assets/logo.png';
               <p class="hint-text">اگر پوشه‌ای انتخاب نشود، زاپاس برای همه پوشه‌ها فعال است.</p>
               <div id="zapasBindingsList" class="hashtag-configs-list"></div>
             </article>
+          </div>
+
+          <div id="zapasPanelHistory" class="channel-panel" hidden>
             <article class="glass-card panel-card">
               <h3 class="panel-card__title"><i class="fa-solid fa-clock-rotate-left"></i> تاریخچه جایگزینی</h3>
               <div id="zapasReplacementsList" class="hashtag-configs-list"></div>
