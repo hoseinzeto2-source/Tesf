@@ -14,8 +14,16 @@ $user = requireTelegramUser();
 $telegramId = (int) $user['id'];
 
 try {
-    runOwnerChildBotHealthPass($telegramId);
-    syncMissingChildBotProfilePhotos($telegramId, 8);
+    try {
+        runOwnerChildBotHealthPass($telegramId, 2);
+    } catch (Throwable $healthError) {
+        error_log('my_bots health pass skipped: ' . $healthError->getMessage());
+    }
+    try {
+        syncMissingChildBotProfilePhotos($telegramId, 2);
+    } catch (Throwable $photoError) {
+        error_log('my_bots profile sync skipped: ' . $photoError->getMessage());
+    }
     $bots = getChildBotsByOwner($telegramId);
     $folders = getBotFolders($telegramId);
     $bots = attachFolderIdsToBots($bots, $telegramId, $folders);
