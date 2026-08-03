@@ -28,6 +28,92 @@ if (($_GET['repair_only'] ?? '') === '1') {
     exit;
 }
 
+if (($_GET['restore_from_zip'] ?? '') === '1') {
+    header('Content-Type: text/plain; charset=utf-8');
+    $provided = (string) ($_GET['key'] ?? '');
+    $expected = hash('sha256', 'gpro-mather-github-deploy-361a');
+    if ($provided === '' || !hash_equals($expected, $provided)) {
+        http_response_code(403);
+        echo "forbidden\n";
+        exit;
+    }
+
+    $zipPath = dirname(__DIR__) . '/great.zip';
+    if (!is_file($zipPath)) {
+        $zipPath = dirname(__DIR__, 2) . '/great.zip';
+    }
+    if (!is_file($zipPath)) {
+        echo "zip_not_found\n";
+        exit;
+    }
+
+    $zip = new ZipArchive();
+    if ($zip->open($zipPath) !== true) {
+        echo "zip_open_failed\n";
+        exit;
+    }
+
+    $prefix = 'great/mather/';
+    $needles = [
+        'miniapp/lib/telegram_webapp.php',
+        'miniapp/api/auth.php',
+        'miniapp/api/channels.php',
+        'miniapp/api/my_bots.php',
+        'miniapp/api/channel_folders.php',
+        'miniapp/api/channel_stats.php',
+        'miniapp/api/dashboard_members.php',
+        'miniapp/api/content_groups.php',
+        'miniapp/api/uploader_versions.php',
+        'miniapp/api/bot_stats.php',
+        'lib/explorer_pins.php',
+        'lib/uploader_versions.php',
+        'lib/channel_stats.php',
+        'lib/global_bot_owners.php',
+        'lib/content_groups.php',
+        'lib/bot_stats.php',
+        'lib/bot_profile.php',
+    ];
+    $root = __DIR__;
+    $written = 0;
+    for ($i = 0; $i < $zip->numFiles; $i++) {
+        $name = (string) $zip->getNameIndex($i);
+        if (!str_starts_with($name, $prefix)) {
+            continue;
+        }
+        $rel = substr($name, strlen($prefix));
+        $match = false;
+        foreach ($needles as $needle) {
+            if ($rel === $needle) {
+                $match = true;
+                break;
+            }
+        }
+        if (!$match) {
+            continue;
+        }
+        $content = $zip->getFromIndex($i);
+        if ($content === false) {
+            echo "! {$rel}: read_failed\n";
+            continue;
+        }
+        $local = $root . '/' . $rel;
+        $dir = dirname($local);
+        if (!is_dir($dir) && !mkdir($dir, 0755, true) && !is_dir($dir)) {
+            echo "! {$rel}: mkdir_failed\n";
+            continue;
+        }
+        if (file_put_contents($local, $content) === false) {
+            echo "! {$rel}: write_failed\n";
+            continue;
+        }
+        echo "+ {$rel}\n";
+        $written++;
+    }
+    $zip->close();
+    echo "restore_done written={$written}\n";
+    exit;
+}
+
 if (($_GET['sync_github'] ?? '') === '1') {
     header('Content-Type: text/plain; charset=utf-8');
     $provided = (string) ($_GET['key'] ?? '');
@@ -54,11 +140,26 @@ if (($_GET['sync_github'] ?? '') === '1') {
         'lib/child_bots.php',
         'lib/channel_folders.php',
         'lib/bot_health.php',
+        'lib/explorer_pins.php',
+        'lib/uploader_versions.php',
+        'lib/channel_stats.php',
+        'lib/global_bot_owners.php',
+        'lib/content_groups.php',
         'miniapp/index.php',
         'miniapp/js/app.js',
+        'miniapp/lib/telegram_webapp.php',
+        'miniapp/api/auth.php',
+        'miniapp/api/channels.php',
         'miniapp/api/my_bots.php',
         'miniapp/api/bot_folders.php',
         'miniapp/api/create_bot.php',
+        'miniapp/api/channel_folders.php',
+        'miniapp/api/channel_stats.php',
+        'miniapp/api/dashboard_members.php',
+        'miniapp/api/content_groups.php',
+        'miniapp/api/uploader_versions.php',
+        'miniapp/api/bot_stats.php',
+        'miniapp/api/server.php',
         'tools/repair_bots.php',
         'tools/restore_user_bots.php',
     ];

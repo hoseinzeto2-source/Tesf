@@ -17,16 +17,16 @@ try {
     $bots = getChildBotsByOwner($telegramId);
     $folders = getBotFolders($telegramId);
     $bots = attachFolderIdsToBots($bots, $telegramId, $folders);
-    $channelFolders = [];
+
+    $channelFolderMap = [];
     try {
-        $channelFolders = getChannelFolders();
+        foreach (getChannelFolders() as $folder) {
+            $channelFolderMap[(int) $folder['id']] = $folder['name'];
+        }
     } catch (Throwable $e) {
         error_log('my_bots channel folders skipped: ' . $e->getMessage());
     }
-    $channelFolderMap = [];
-    foreach ($channelFolders as $folder) {
-        $channelFolderMap[(int) $folder['id']] = $folder['name'];
-    }
+
     $versionMap = [];
     try {
         foreach (listUploaderVersions(true) as $version) {
@@ -36,51 +36,56 @@ try {
         error_log('my_bots versions skipped: ' . $e->getMessage());
     }
 
-    $safe = array_map(static function ($bot) use ($channelFolderMap, $versionMap) {
-        $channelFolderId = isset($bot['channel_folder_id']) ? (int) $bot['channel_folder_id'] : null;
-        $versionId = isset($bot['uploader_version_id']) ? (int) $bot['uploader_version_id'] : null;
-        $botId = (int) $bot['id'];
-        $userCount = countUploaderUsersForBot($botId);
-        $userGrowth24h = 0;
-        ensureBotStatsTables();
-        $db = getDb();
-        $stmt = $db->prepare(
-            'SELECT COUNT(*) AS cnt FROM uploader_users WHERE child_bot_id = ? AND created_at >= DATE_SUB(NOW(), INTERVAL 1 DAY)'
-        );
-        $stmt->bind_param('i', $botId);
-        $stmt->execute();
-        $row = $stmt->get_result()->fetch_assoc();
-        $stmt->close();
-        $userGrowth24h = (int) ($row['cnt'] ?? 0);
+    $safe = [];
+    foreach ($bots as $bot) {
+        try {
+            $channelFolderId = isset($bot['channel_folder_id']) ? (int) $bot['channel_folder_id'] : null;
+            $versionId = isset($bot['uploader_version_id']) ? (int) $bot['uploader_version_id'] : null;
+            $botId = (int) $bot['id'];
+            $userCount = countUploaderUsersForBot($botId);
+            $userGrowth24h = 0;
+            ensureBotStatsTables();
+            $db = getDb();
+            $stmt = $db->prepare(
+                'SELECT COUNT(*) AS cnt FROM uploader_users WHERE child_bot_id = ? AND created_at >= DATE_SUB(NOW(), INTERVAL 1 DAY)'
+            );
+            $stmt->bind_param('i', $botId);
+            $stmt->execute();
+            $row = $stmt->get_result()->fetch_assoc();
+            $stmt->close();
+            $userGrowth24h = (int) ($row['cnt'] ?? 0);
 
-        $health = childBotHealthPayload($bot);
-        $photo = botPhotoPayloadFromFileId($botId, $bot['profile_photo_file_id'] ?? null);
+            $health = childBotHealthPayload($bot);
+            $photo = botPhotoPayloadFromFileId($botId, $bot['profile_photo_file_id'] ?? null);
 
-        return [
-            'id' => $botId,
-            'bot_username' => $bot['bot_username'],
-            'bot_name' => $bot['bot_name'],
-            'bot_type' => $bot['bot_type'],
-            'status' => $bot['status'],
-            'health_status' => $health['health_status'],
-            'health_message' => $health['health_message'],
-            'is_banned' => $health['is_banned'],
-            'has_photo' => $photo['has_photo'],
-            'photo_url' => $photo['photo_url'],
-            'uploads_count' => (int) ($bot['uploads_count'] ?? 0),
-            'user_count' => $userCount,
-            'user_growth_24h' => $userGrowth24h,
-            'created_at' => $bot['created_at'],
-            'folder_id' => $bot['folder_id'] ?? null,
-            'channel_folder_id' => $channelFolderId ?: null,
-            'channel_folder_name' => $channelFolderId ? ($channelFolderMap[$channelFolderId] ?? null) : null,
-            'uploader_version_id' => $versionId ?: null,
-            'uploader_version_name' => $versionId ? ($versionMap[$versionId] ?? null) : null,
-            'link' => $bot['bot_username'] ? 'https://t.me/' . $bot['bot_username'] : null,
-            'is_pinned' => (int) ($bot['is_pinned'] ?? 0) === 1,
-            'pinned_at' => $bot['pinned_at'] ?? null,
-        ];
-    }, $bots);
+            $safe[] = [
+                'id' => $botId,
+                'bot_username' => $bot['bot_username'],
+                'bot_name' => $bot['bot_name'],
+                'bot_type' => $bot['bot_type'],
+                'status' => $bot['status'],
+                'health_status' => $health['health_status'],
+                'health_message' => $health['health_message'],
+                'is_banned' => $health['is_banned'],
+                'has_photo' => $photo['has_photo'],
+                'photo_url' => $photo['photo_url'],
+                'uploads_count' => (int) ($bot['uploads_count'] ?? 0),
+                'user_count' => $userCount,
+                'user_growth_24h' => $userGrowth24h,
+                'created_at' => $bot['created_at'],
+                'folder_id' => $bot['folder_id'] ?? null,
+                'channel_folder_id' => $channelFolderId ?: null,
+                'channel_folder_name' => $channelFolderId ? ($channelFolderMap[$channelFolderId] ?? null) : null,
+                'uploader_version_id' => $versionId ?: null,
+                'uploader_version_name' => $versionId ? ($versionMap[$versionId] ?? null) : null,
+                'link' => $bot['bot_username'] ? 'https://t.me/' . $bot['bot_username'] : null,
+                'is_pinned' => (int) ($bot['is_pinned'] ?? 0) === 1,
+                'pinned_at' => $bot['pinned_at'] ?? null,
+            ];
+        } catch (Throwable $botError) {
+            error_log('my_bots row failed bot ' . ($bot['id'] ?? '?') . ': ' . $botError->getMessage());
+        }
+    }
 
     $totalBotUsers = 0;
     foreach ($safe as $botRow) {

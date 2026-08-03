@@ -9311,10 +9311,35 @@
     };
     if (auth) renderProfile(auth);
 
-    const results = await Promise.allSettled([
-      api("server.php"),
+    const coreResults = await Promise.allSettled([
       api("channels.php"),
       api("my_bots.php"),
+    ]);
+
+    if (coreResults[0].status === "fulfilled") {
+      state.cache.channels = coreResults[0].value;
+      renderChannels(coreResults[0].value);
+    } else {
+      renderChannels({ channels: [], total: 0, totals: {} });
+      console.warn("channels load failed", coreResults[0].reason);
+      showToast("بارگذاری کانال‌ها ناموفق بود", { type: "error" });
+    }
+
+    if (coreResults[1].status === "fulfilled") {
+      state.cache.bots = coreResults[1].value;
+      state.openBotFolderId = null;
+      renderBots(coreResults[1].value);
+    } else {
+      state.openBotFolderId = null;
+      renderBots({ bots: [], total: 0, folders: [] });
+      console.warn("bots load failed", coreResults[1].reason);
+      showToast("بارگذاری ربات‌ها ناموفق بود", { type: "error", duration: 5000 });
+    }
+
+    renderHomeQuickStats();
+
+    const results = await Promise.allSettled([
+      api("server.php"),
       api("content_groups.php"),
       autoPostApi(),
       hashtagToolsApi(),
@@ -9334,71 +9359,50 @@
     }
 
     if (results[1].status === "fulfilled") {
-      state.cache.channels = results[1].value;
-      renderChannels(results[1].value);
+      state.cache.contentGroups = results[1].value;
+      renderContentGroups(results[1].value);
     } else {
-      renderChannels({ channels: [], total: 0, totals: {} });
-      console.warn("channels load failed", results[1].reason);
-      showToast("بارگذاری لیست کانال‌ها ناموفق بود", { type: "error" });
+      renderContentGroups({ groups: [], total: 0, folders: [] });
+      console.warn("content groups load failed", results[1].reason);
     }
 
     if (results[2].status === "fulfilled") {
-      state.cache.bots = results[2].value;
-      state.openBotFolderId = null;
-      renderBots(results[2].value);
+      state.cache.autoPost = results[2].value;
+      renderAutoPost(results[2].value);
     } else {
-      state.openBotFolderId = null;
-      renderBots({ bots: [], total: 0, folders: [] });
-      console.warn("bots load failed", results[2].reason);
-      showToast("بارگذاری ربات‌ها ناموفق بود — مینی‌اپ را ببندید و دوباره باز کنید", { type: "error", duration: 5000 });
+      renderAutoPost({ folders: [], sessions: [], total: 0 });
+      console.warn("auto post load failed", results[2].reason);
     }
 
     if (results[3].status === "fulfilled") {
-      state.cache.contentGroups = results[3].value;
-      renderContentGroups(results[3].value);
+      state.cache.hashtagTools = results[3].value;
     } else {
-      renderContentGroups({ groups: [], total: 0, folders: [] });
-      console.warn("content groups load failed", results[3].reason);
+      state.cache.hashtagTools = { folders: [], sets: [] };
+      console.warn("hashtag tools load failed", results[3].reason);
     }
 
     if (results[4].status === "fulfilled") {
-      state.cache.autoPost = results[4].value;
-      renderAutoPost(results[4].value);
+      state.cache.bannerTools = results[4].value;
     } else {
-      renderAutoPost({ folders: [], sessions: [], total: 0 });
-      console.warn("auto post load failed", results[4].reason);
+      state.cache.bannerTools = { groups: [], bindings: [], stats: {} };
+      console.warn("banner tools load failed", results[4].reason);
     }
 
     if (results[5].status === "fulfilled") {
-      state.cache.hashtagTools = results[5].value;
+      state.cache.glassButtonTools = results[5].value;
     } else {
-      state.cache.hashtagTools = { folders: [], sets: [] };
-      console.warn("hashtag tools load failed", results[5].reason);
+      state.cache.glassButtonTools = { settings: [], stats: {} };
+      console.warn("glass button tools load failed", results[5].reason);
     }
 
     if (results[6].status === "fulfilled") {
-      state.cache.bannerTools = results[6].value;
-    } else {
-      state.cache.bannerTools = { groups: [], bindings: [], stats: {} };
-      console.warn("banner tools load failed", results[6].reason);
-    }
-
-    if (results[7].status === "fulfilled") {
-      state.cache.glassButtonTools = results[7].value;
-    } else {
-      state.cache.glassButtonTools = { settings: [], stats: {} };
-      console.warn("glass button tools load failed", results[7].reason);
-    }
-
-    if (results[8].status === "fulfilled") {
-      state.cache.zapasTools = results[8].value;
+      state.cache.zapasTools = results[6].value;
     } else {
       state.cache.zapasTools = { bots: [], bindings: [], replacements: [], stats: {} };
-      console.warn("zapas tools load failed", results[8].reason);
+      console.warn("zapas tools load failed", results[6].reason);
     }
 
     renderToolsExplorer(state.cache.hashtagTools, state.cache.bannerTools, state.cache.glassButtonTools, state.cache.zapasTools);
-
     renderHomeQuickStats();
 
     return state.cache;

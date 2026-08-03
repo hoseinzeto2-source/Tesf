@@ -179,7 +179,6 @@ function attachFolderIdsToBots(array $bots, int $ownerTelegramId, ?array $folder
         $botId = (int) ($bot['id'] ?? 0);
         $folderId = $assignments[$botId] ?? null;
         if ($folderId !== null && !isset($validFolderIds[$folderId])) {
-            assignBotToFolder($botId, null, $ownerTelegramId);
             $folderId = null;
         }
         $bot['folder_id'] = $folderId;
