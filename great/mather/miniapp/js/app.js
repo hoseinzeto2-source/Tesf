@@ -1421,6 +1421,10 @@
   }
 
   function api(path, options = {}) {
+    const timeoutMs = Number(options.timeout) > 0 ? Number(options.timeout) : 20000;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+
     return fetch(`api/${path}`, {
       method: options.method || "GET",
       headers: {
@@ -1428,13 +1432,16 @@
         "X-Telegram-Init-Data": state.initData,
       },
       body: options.body ? JSON.stringify(options.body) : undefined,
-    }).then(async (res) => {
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        throw new Error(data.error || "request_failed");
-      }
-      return data;
-    });
+      signal: controller.signal,
+    })
+      .then(async (res) => {
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          throw new Error(data.error || "request_failed");
+        }
+        return data;
+      })
+      .finally(() => clearTimeout(timer));
   }
 
   function formatDate(value) {
@@ -9289,14 +9296,20 @@
     renderUploaderVersions(server);
   }
 
-  async function loadData() {
-    const auth = await api("auth.php", {
-      method: "POST",
-      body: { initData: state.initData },
-    });
-
-    state.cache = { auth, server: null, channels: null, bots: null, contentGroups: null, autoPost: null, hashtagTools: null, bannerTools: null, glassButtonTools: null, zapasTools: null };
-    renderProfile(auth);
+  async function loadAppData(auth) {
+    state.cache = {
+      auth: auth || state.cache?.auth || null,
+      server: null,
+      channels: null,
+      bots: null,
+      contentGroups: null,
+      autoPost: null,
+      hashtagTools: null,
+      bannerTools: null,
+      glassButtonTools: null,
+      zapasTools: null,
+    };
+    if (auth) renderProfile(auth);
 
     const results = await Promise.allSettled([
       api("server.php"),
@@ -9391,15 +9404,39 @@
     return state.cache;
   }
 
+  async function loadData() {
+    const auth = await api("auth.php", {
+      method: "POST",
+      body: { initData: state.initData },
+      timeout: 15000,
+    });
+    return loadAppData(auth);
+  }
+
   async function authenticate() {
     setText("authStatus", "در حال احراز هویت...");
-    await loadData();
+
+    const auth = await api("auth.php", {
+      method: "POST",
+      body: { initData: state.initData },
+      timeout: 15000,
+    });
+
+    state.cache = state.cache || {};
+    state.cache.auth = auth;
+    renderProfile(auth);
 
     const loader = document.querySelector(".auth__loader");
     if (loader) loader.hidden = true;
 
     showScreen("home");
     tg?.HapticFeedback?.notificationOccurred("success");
+
+    setText("authStatus", "در حال بارگذاری اطلاعات...");
+    loadAppData(auth).catch((error) => {
+      console.warn("background load failed", error);
+      showToast("برخی بخش‌ها بارگذاری نشدند — دکمه بروزرسانی را بزنید", { type: "warning", duration: 5000 });
+    });
   }
 
   async function loadAdsTab() {
