@@ -82,6 +82,7 @@ function runSchemaMigrations(bool $forceMarkerOnly = false): array
         require_once __DIR__ . '/child_bots.php';
         require_once __DIR__ . '/bot_health.php';
         require_once __DIR__ . '/bot_stats.php';
+        require_once __DIR__ . '/auto_post.php';
 
         ensureBotFolderParentColumn();
         $steps[] = 'bot_folders.parent_id';
@@ -100,7 +101,9 @@ function runSchemaMigrations(bool $forceMarkerOnly = false): array
         ensureUploaderFilesLocalCacheColumn();
         $steps[] = 'uploader_files.columns';
         ensureUploaderUsersCreatedAtColumn();
-        $steps[] = 'uploader_users.created_at';
+        $steps[] = 'uploader_users.columns';
+        ensureAutoPostBotFolderColumn();
+        $steps[] = 'auto_post_sessions.bot_folder_id';
 
         markSchemaMigrationsComplete();
         $steps[] = 'marker_written';

@@ -11,11 +11,16 @@ $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 if ($method === 'GET') {
     $sessionId = isset($_GET['session_id']) ? (int) $_GET['session_id'] : 0;
     if ($sessionId > 0) {
-        $stats = getAutoPostSessionStats($telegramId, $sessionId);
-        if (!$stats) {
-            jsonResponse(['ok' => false, 'error' => 'session_not_found'], 404);
+        try {
+            $stats = getAutoPostSessionStats($telegramId, $sessionId);
+            if (!$stats) {
+                jsonResponse(['ok' => false, 'error' => 'session_not_found'], 404);
+            }
+            jsonResponse(['ok' => true, ...$stats]);
+        } catch (Throwable $e) {
+            error_log('auto_post session stats failed: ' . $e->getMessage());
+            jsonResponse(['ok' => false, 'error' => 'server_error'], 500);
         }
-        jsonResponse(['ok' => true, ...$stats]);
     }
 
     jsonResponse([

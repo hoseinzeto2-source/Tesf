@@ -1,6 +1,7 @@
 <?php
 
 require_once dirname(__DIR__) . '/db.php';
+require_once __DIR__ . '/schema_bootstrap.php';
 require_once __DIR__ . '/channel_folders.php';
 require_once __DIR__ . '/bot_folders.php';
 require_once __DIR__ . '/child_bots.php';
@@ -48,12 +49,18 @@ CREATE TABLE IF NOT EXISTS auto_post_sessions (
 SQL
     );
     ensureAutoPostBotFolderColumn();
-    ensureExplorerPinColumns('auto_post_folders');
-    ensureExplorerPinColumns('auto_post_sessions');
+    if (!schemaMigrationsComplete()) {
+        ensureExplorerPinColumns('auto_post_folders');
+        ensureExplorerPinColumns('auto_post_sessions');
+    }
 }
 
 function ensureAutoPostBotFolderColumn(): void
 {
+    if (schemaMigrationsComplete()) {
+        return;
+    }
+
     $db = getDb();
     $hasNew = $db->query("SHOW COLUMNS FROM auto_post_sessions LIKE 'bot_folder_id'");
     if ($hasNew && $hasNew->num_rows > 0) {
@@ -739,21 +746,25 @@ function getAutoPostSessionStats(int $ownerTelegramId, int $sessionId): ?array
     $botJoins1h = 0;
     $botJoins24h = 0;
     if ($healthyBotIds !== []) {
-        $botIdList = implode(',', $healthyBotIds);
-        $userResult = $db->query(
-            "SELECT COUNT(DISTINCT telegram_id) AS unique_users,
-                    SUM(CASE WHEN created_at >= DATE_SUB(NOW(), INTERVAL 1 HOUR) THEN 1 ELSE 0 END) AS joins_1h,
-                    SUM(CASE WHEN created_at >= DATE_SUB(NOW(), INTERVAL 1 DAY) THEN 1 ELSE 0 END) AS joins_24h,
-                    COUNT(DISTINCT CASE WHEN last_seen_at >= DATE_SUB(NOW(), INTERVAL 1 DAY) THEN telegram_id END) AS active_24h
-             FROM uploader_users WHERE child_bot_id IN ({$botIdList})"
-        );
-        if ($userResult) {
-            $userRow = $userResult->fetch_assoc();
-            $uniqueBotUsers = (int) ($userRow['unique_users'] ?? 0);
-            $botJoins1h = (int) ($userRow['joins_1h'] ?? 0);
-            $botUsers24h = (int) ($userRow['joins_24h'] ?? 0);
-            $botJoins24h = $botUsers24h;
-            $botActive24h = (int) ($userRow['active_24h'] ?? 0);
+        try {
+            $botIdList = implode(',', $healthyBotIds);
+            $userResult = $db->query(
+                "SELECT COUNT(DISTINCT telegram_id) AS unique_users,
+                        SUM(CASE WHEN created_at >= DATE_SUB(NOW(), INTERVAL 1 HOUR) THEN 1 ELSE 0 END) AS joins_1h,
+                        SUM(CASE WHEN created_at >= DATE_SUB(NOW(), INTERVAL 1 DAY) THEN 1 ELSE 0 END) AS joins_24h,
+                        COUNT(DISTINCT CASE WHEN last_seen_at >= DATE_SUB(NOW(), INTERVAL 1 DAY) THEN telegram_id END) AS active_24h
+                 FROM uploader_users WHERE child_bot_id IN ({$botIdList})"
+            );
+            if ($userResult) {
+                $userRow = $userResult->fetch_assoc();
+                $uniqueBotUsers = (int) ($userRow['unique_users'] ?? 0);
+                $botJoins1h = (int) ($userRow['joins_1h'] ?? 0);
+                $botUsers24h = (int) ($userRow['joins_24h'] ?? 0);
+                $botJoins24h = $botUsers24h;
+                $botActive24h = (int) ($userRow['active_24h'] ?? 0);
+            }
+        } catch (Throwable $e) {
+            error_log('getAutoPostSessionStats user aggregates: ' . $e->getMessage());
         }
     }
 
@@ -795,12 +806,23 @@ function getAutoPostSessionStats(int $ownerTelegramId, int $sessionId): ?array
     }
 
     ensureChannelStatsTables();
-    $channelJoinsHourly = getAggregatedJoinsHourly24ForChatIds($chatIdsForCharts);
-    $channelMembersHourly = getAggregatedMembersHourly24ForChatIds($chatIdsForCharts);
-    $botJoinsHourly = getAggregatedBotUserJoinsHourly24($healthyBotIds);
-    $botUsersHourly = getAggregatedBotUsersTotalHourly24($healthyBotIds);
-    $uniqueBotJoinsHourly = getAggregatedUniqueBotUserJoinsHourly24($healthyBotIds);
-    $uniqueBotUsersHourly = getAggregatedUniqueBotUsersTotalHourly24($healthyBotIds);
+    try {
+        $channelJoinsHourly = getAggregatedJoinsHourly24ForChatIds($chatIdsForCharts);
+        $channelMembersHourly = getAggregatedMembersHourly24ForChatIds($chatIdsForCharts);
+        $botJoinsHourly = getAggregatedBotUserJoinsHourly24($healthyBotIds);
+        $botUsersHourly = getAggregatedBotUsersTotalHourly24($healthyBotIds);
+        $uniqueBotJoinsHourly = getAggregatedUniqueBotUserJoinsHourly24($healthyBotIds);
+        $uniqueBotUsersHourly = getAggregatedUniqueBotUsersTotalHourly24($healthyBotIds);
+    } catch (Throwable $e) {
+        error_log('getAutoPostSessionStats charts: ' . $e->getMessage());
+        $empty = emptyBotStatsHourlyChart();
+        $channelJoinsHourly = getAggregatedJoinsHourly24ForChatIds([]);
+        $channelMembersHourly = getAggregatedMembersHourly24ForChatIds([]);
+        $botJoinsHourly = $empty;
+        $botUsersHourly = $empty;
+        $uniqueBotJoinsHourly = $empty;
+        $uniqueBotUsersHourly = $empty;
+    }
     $combinedReachHourly = mergeHourlySumCharts($channelMembersHourly, $uniqueBotUsersHourly);
     $combinedNewHourly = mergeHourlySumCharts($channelJoinsHourly, $uniqueBotJoinsHourly);
     $combinedNew24h = 0;
