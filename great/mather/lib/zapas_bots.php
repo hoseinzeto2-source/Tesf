@@ -433,11 +433,6 @@ function updateChannelPostsAfterBotSwap(
         return 0;
     }
 
-    $manageToken = manageBotToken();
-    if ($manageToken === '') {
-        return 0;
-    }
-
     $updated = 0;
     $newUsername = trim((string) ($newBot['bot_username'] ?? ''));
     if ($newUsername === '') {
@@ -446,6 +441,10 @@ function updateChannelPostsAfterBotSwap(
 
     foreach ($posts as $post) {
         $channelChatId = (int) ($post['channel_chat_id'] ?? 0);
+        $manageToken = manageBotToken($channelChatId);
+        if ($manageToken === '') {
+            continue;
+        }
         $messageId = (int) ($post['message_id'] ?? 0);
         $linkCode = (string) ($post['link_code'] ?? '');
         $mediaType = (string) ($post['media_type'] ?? 'photo');

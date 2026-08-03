@@ -8604,6 +8604,180 @@
     }
   }
 
+  function renderManageBots(server) {
+    const card = document.getElementById("manageBotsCard");
+    const list = document.getElementById("manageBotsList");
+    const statsLine = document.getElementById("manageBotsStatsLine");
+    if (!card || !list) return;
+
+    if (!server?.is_admin) {
+      card.hidden = true;
+      return;
+    }
+
+    card.hidden = false;
+    const bots = server.manage_bots || [];
+    const stats = server.manage_bots_stats || {};
+    if (statsLine) {
+      statsLine.textContent = `${stats.active_bot_count || bots.length} ربات · ${stats.total_channel_bindings || 0} کانال متصل · حداکثر ${stats.channel_limit || 500} کانال per ربات`;
+    }
+
+    if (!bots.length) {
+      list.innerHTML = `<p class="channel-empty__sub">فقط ربات اصلی فعال است — برای کانال‌های بیشتر «افزودن ربات» را بزنید.</p>`;
+      return;
+    }
+
+    list.innerHTML = bots
+      .map((bot) => {
+        const username = bot.bot_username ? `@${escapeHtml(bot.bot_username)}` : "ربات";
+        const name = bot.bot_name ? escapeHtml(bot.bot_name) : username;
+        const primaryBadge = bot.is_primary
+          ? '<span class="version-badge version-badge--default">اصلی</span>'
+          : "";
+        const healthClass =
+          bot.health_status === "ok"
+            ? "version-badge--default"
+            : bot.near_capacity
+              ? "version-badge--warn"
+              : "version-badge--danger";
+        const healthLabel =
+          bot.health_status === "ok"
+            ? "سالم"
+            : bot.health_message || bot.health_status || "مشکل";
+        const capacity = `${formatNumber(bot.channel_count || 0)} / ${formatNumber(bot.channel_limit || 500)} کانال`;
+        const capacityWarn = bot.near_capacity
+          ? '<p class="uploader-version-row__meta manage-bot-row__warn"><i class="fa-solid fa-triangle-exclamation"></i> نزدیک به سقف ۵۰۰ کانال</p>'
+          : bot.at_capacity
+            ? '<p class="uploader-version-row__meta manage-bot-row__warn"><i class="fa-solid fa-ban"></i> ظرفیت پر شده</p>'
+            : "";
+
+        return `
+        <div class="uploader-version-row manage-bot-row${bot.is_primary ? " manage-bot-row--primary" : ""}">
+          <div class="uploader-version-row__head">
+            <strong class="uploader-version-row__title">${name}</strong>
+            ${primaryBadge}
+            <span class="version-badge ${healthClass}">${escapeHtml(healthLabel)}</span>
+          </div>
+          <p class="uploader-version-row__meta" dir="ltr">${username}</p>
+          <p class="uploader-version-row__meta">${capacity}</p>
+          ${capacityWarn}
+          <div class="manage-bot-row__actions">
+            ${
+              bot.is_primary
+                ? ""
+                : `<button type="button" class="btn btn--ghost btn--sm" data-refresh-manage-bot="${bot.id}"><i class="fa-solid fa-rotate"></i> بررسی</button>
+                   <button type="button" class="btn btn--ghost btn--sm btn--danger" data-remove-manage-bot="${bot.id}"><i class="fa-solid fa-trash"></i> حذف</button>`
+            }
+          </div>
+        </div>`;
+      })
+      .join("");
+
+    list.querySelectorAll("[data-refresh-manage-bot]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const id = Number(btn.dataset.refreshManageBot || 0);
+        if (!id) return;
+        btn.disabled = true;
+        try {
+          await manageBotsApi({ action: "refresh_health", manage_bot_id: id });
+          await loadServerTab();
+          showToast("سلامت ربات بررسی شد", { type: "success" });
+        } catch (_) {
+          showToast("بررسی سلامت ناموفق بود", { type: "error" });
+        } finally {
+          btn.disabled = false;
+        }
+      });
+    });
+
+    list.querySelectorAll("[data-remove-manage-bot]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const id = Number(btn.dataset.removeManageBot || 0);
+        if (!id) return;
+        btn.disabled = true;
+        try {
+          await manageBotsApi({ action: "remove_bot", manage_bot_id: id });
+          await loadServerTab();
+          showToast("ربات مدیریت حذف شد", { type: "success" });
+        } catch (e) {
+          showToast(manageBotErrorMessage(e?.message), { type: "error", duration: 4500 });
+        } finally {
+          btn.disabled = false;
+        }
+      });
+    });
+  }
+
+  async function manageBotsApi(body) {
+    return api("manage_bots.php", { method: "POST", body });
+  }
+
+  function manageBotErrorMessage(code) {
+    const map = {
+      token_required: "توکن ربات را وارد کنید",
+      invalid_token: "توکن ربات نامعتبر است",
+      primary_bot_exists: "این همان ربات اصلی است",
+      cannot_replace_primary: "ربات اصلی قابل جایگزینی نیست",
+      cannot_remove_primary: "ربات اصلی قابل حذف نیست",
+      manage_bot_has_channels: "این ربات هنوز کانال دارد — ابتدا کانال‌ها را به ربات دیگر منتقل کنید",
+      remove_failed: "حذف ناموفق بود",
+      forbidden: "دسترسی ندارید",
+    };
+    return map[code] || "عملیات ناموفق بود";
+  }
+
+  function openManageBotModal() {
+    const modal = document.getElementById("manageBotModal");
+    const input = document.getElementById("manageBotTokenInput");
+    if (input) input.value = "";
+    if (modal) modal.hidden = false;
+    input?.focus();
+  }
+
+  function closeManageBotModal() {
+    const modal = document.getElementById("manageBotModal");
+    if (modal) modal.hidden = true;
+  }
+
+  function initManageBotsUi() {
+    document.getElementById("btnAddManageBot")?.addEventListener("click", openManageBotModal);
+    document.querySelectorAll("[data-close-manage-bot]").forEach((el) => {
+      el.addEventListener("click", closeManageBotModal);
+    });
+    document.getElementById("btnSaveManageBot")?.addEventListener("click", async () => {
+      const token = document.getElementById("manageBotTokenInput")?.value?.trim() || "";
+      if (!token) {
+        showToast("توکن ربات را وارد کنید", { type: "warning" });
+        return;
+      }
+      const btn = document.getElementById("btnSaveManageBot");
+      if (btn) btn.disabled = true;
+      try {
+        await manageBotsApi({ action: "add_bot", token });
+        closeManageBotModal();
+        await loadServerTab();
+        showToast("ربات مدیریت اضافه و وب‌هوک تنظیم شد", { type: "success" });
+      } catch (e) {
+        showToast(manageBotErrorMessage(e?.message), { type: "error", duration: 4500 });
+      } finally {
+        if (btn) btn.disabled = false;
+      }
+    });
+    document.getElementById("btnRefreshManageBotsHealth")?.addEventListener("click", async () => {
+      const btn = document.getElementById("btnRefreshManageBotsHealth");
+      if (btn) btn.disabled = true;
+      try {
+        await manageBotsApi({ action: "refresh_all_health" });
+        await loadServerTab();
+        showToast("سلامت همه ربات‌های مدیریت بررسی شد", { type: "success" });
+      } catch (_) {
+        showToast("بررسی سلامت ناموفق بود", { type: "error" });
+      } finally {
+        if (btn) btn.disabled = false;
+      }
+    });
+  }
+
   function renderGlobalBotOwners(server) {
     const card = document.getElementById("globalBotOwnersCard");
     const list = document.getElementById("globalBotOwnersList");
@@ -8998,6 +9172,7 @@
     syncDefaultUploaderVersionLabel(server.default_uploader_version);
     syncDefaultGuardianVersionLabel(server.default_guardian_version);
     renderGlobalBotOwners(server);
+    renderManageBots(server);
     renderUploaderVersions(server);
   }
 
@@ -9420,6 +9595,7 @@
     initHashtagToolsUi();
     initChannelProfileUi();
     initGlobalBotOwnerUi();
+    initManageBotsUi();
     initUploaderVersionUi();
     initModalEnterSubmit();
 

@@ -4512,3 +4512,18 @@ a:focus-visible,
  text-decoration: underline;
  text-underline-offset: 2px;
 }
+
+.manage-bot-row--primary {
+ border-color: rgba(16, 185, 129, 0.25);
+}
+
+.manage-bot-row__actions {
+ display: flex;
+ gap: 0.45rem;
+ margin-top: 0.55rem;
+ flex-wrap: wrap;
+}
+
+.manage-bot-row__warn {
+ color: #b45309;
+}

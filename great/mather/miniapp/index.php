@@ -1864,6 +1864,28 @@ $logoUrl = 'https://mr-cheat.ir/assets/logo.png';
             </div>
           </article>
 
+          <article id="manageBotsCard" class="glass-card panel-card" hidden>
+            <div class="panel-card__headrow">
+              <h3 class="panel-card__title"><i class="fa-solid fa-robot"></i> ربات‌های مدیریت</h3>
+              <button id="btnAddManageBot" type="button" class="btn btn--ghost btn--sm">
+                <i class="fa-solid fa-plus"></i>
+                افزودن ربات
+              </button>
+            </div>
+            <p class="hint-text">
+              برای عبور از محدودیت ~۵۰۰ کانال، ربات‌های کمکی اضافه کنید. کنترل کامل همچنان از ربات اصلی
+              <strong>@gpro100_bot</strong> است؛ جوین اجباری و اتوپست از ربات مناسب هر کانال استفاده می‌کنند.
+            </p>
+            <p id="manageBotsStatsLine" class="hashtag-active-config glass-active-config">—</p>
+            <div id="manageBotsList" class="uploader-versions-list">
+              <p class="channel-empty__sub">در حال بارگذاری...</p>
+            </div>
+            <button id="btnRefreshManageBotsHealth" type="button" class="btn btn--ghost btn--block btn--sm" style="margin-top:0.65rem">
+              <i class="fa-solid fa-stethoscope"></i>
+              بررسی سلامت همه ربات‌های مدیریت
+            </button>
+          </article>
+
           <article id="uploaderVersionsCard" class="glass-card panel-card" hidden>
             <div class="panel-card__headrow">
               <h3 class="panel-card__title"><i class="fa-solid fa-code-branch"></i> نسخه‌های اپلودر ساز</h3>
@@ -1909,6 +1931,22 @@ $logoUrl = 'https://mr-cheat.ir/assets/logo.png';
           <span>سرور</span>
         </button>
       </nav>
+
+      <div id="manageBotModal" class="modal" hidden>
+        <div class="modal__backdrop" data-close-manage-bot></div>
+        <div class="modal__card glass-card" role="dialog" aria-labelledby="manageBotModalTitle">
+          <h3 id="manageBotModalTitle" class="modal__title">افزودن ربات مدیریت کمکی</h3>
+          <p class="hint-text">توکن را از BotFather بگیرید. این ربات فقط برای API کانال‌هاست — مینی‌اپ از ربات اصلی باز می‌شود.</p>
+          <label class="field">
+            <span class="field__label">توکن ربات</span>
+            <input id="manageBotTokenInput" class="field__input" type="text" dir="ltr" placeholder="123456:ABC..." />
+          </label>
+          <div class="modal__actions">
+            <button type="button" class="btn btn--ghost" data-close-manage-bot>انصراف</button>
+            <button id="btnSaveManageBot" type="button" class="btn btn--primary">افزودن و تنظیم وب‌هوک</button>
+          </div>
+        </div>
+      </div>
 
       <div id="globalBotOwnerModal" class="modal" hidden>
         <div class="modal__backdrop" data-close-global-owner></div>

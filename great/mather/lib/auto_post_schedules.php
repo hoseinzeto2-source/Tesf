@@ -839,11 +839,11 @@ function getSessionChannelsForPost(int $ownerTelegramId, int $sessionId): array
     return $channels;
 }
 
-function manageBotToken(): string
+function manageBotToken(int $channelChatId = 0): string
 {
-    global $bot_token;
+    require_once __DIR__ . '/manage_bot_router.php';
 
-    return (string) ($bot_token ?? '');
+    return resolveManageBotTokenForChannel($channelChatId);
 }
 
 /**
@@ -1335,7 +1335,7 @@ function cacheContentForUploaderBot(
         return $existing;
     }
 
-    $manageToken = manageBotToken();
+    $manageToken = manageBotToken($channelChatId);
     if ($manageToken === '') {
         return null;
     }
@@ -1528,7 +1528,7 @@ function postAutoContentToChannel(
     $url = 'https://t.me/' . $username . '?start=' . rawurlencode($startPayload);
     $delivery = buildGlassButtonDelivery($ownerTelegramId, $channelFolderId, $url, $mediaType, $finalCaption);
 
-    $manageToken = manageBotToken();
+    $manageToken = manageBotToken($channelChatId);
     if ($manageToken === '') {
         return null;
     }

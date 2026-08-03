@@ -93,6 +93,10 @@ SQL;
     ensureAutoPostChannelPostTables();
     require_once __DIR__ . '/lib/zapas_bots.php';
     ensureZapasToolTables();
+    require_once __DIR__ . '/lib/manage_bots.php';
+    ensureManageBotTables();
+    seedPrimaryManageBotFromConfig();
+    $manageBotsBound = backfillPrimaryManageBotBindings();
     require_once __DIR__ . '/lib/channel_profile.php';
     require_once __DIR__ . '/lib/explorer_pins.php';
     ensureAllExplorerPinColumns();
@@ -102,8 +106,8 @@ SQL;
     if ($migratedGroups > 0) {
         echo ' Migrated content groups: ' . $migratedGroups;
     }
-    if ($backfilledGroupStats > 0) {
-        echo ' Backfilled group messages: ' . $backfilledGroupStats;
+    if ($manageBotsBound > 0) {
+        echo ' Manage bot bindings: ' . $manageBotsBound;
     }
 
     if (!empty($_GET['deploy_miniapp'])) {
