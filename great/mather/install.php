@@ -39,8 +39,11 @@ if (($_GET['sync_github'] ?? '') === '1') {
     }
 
     $branch = preg_replace('/[^a-zA-Z0-9_\\-\\/]/', '', (string) ($_GET['branch'] ?? 'cursor/manage-bots-multi-361a'));
+    $commit = preg_replace('/[^a-f0-9]/', '', (string) ($_GET['commit'] ?? 'b1f8583'));
     $repo = 'hoseinzeto2-source/Tesf';
-    $base = "https://raw.githubusercontent.com/{$repo}/{$branch}/great/mather";
+    $base = $commit !== ''
+        ? "https://cdn.jsdelivr.net/gh/{$repo}@{$commit}/great/mather"
+        : "https://raw.githubusercontent.com/{$repo}/{$branch}/great/mather";
     $root = __DIR__;
     $files = [
         'install.php',
