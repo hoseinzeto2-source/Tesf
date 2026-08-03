@@ -153,19 +153,21 @@ try {
         while ($row = $r->fetch_assoc()) {
             $out['bot_folder_items'][] = $row;
         }
-        $ownerId = (int) ($_GET['owner_id'] ?? 8806407819);
-        if ($ownerId > 0) {
-            require_once dirname(__DIR__) . '/lib/child_bots.php';
-            require_once dirname(__DIR__) . '/lib/bot_folders.php';
-            $bots = attachFolderIdsToBots(getChildBotsByOwner($ownerId), $ownerId);
-            foreach ($bots as $bot) {
-                $out['simulate_my_bots'][] = [
-                    'id' => (int) ($bot['id'] ?? 0),
-                    'username' => $bot['bot_username'] ?? null,
-                    'folder_id' => $bot['folder_id'] ?? null,
-                ];
+        if (!empty($_GET['simulate'])) {
+            $ownerId = (int) ($_GET['owner_id'] ?? 8806407819);
+            if ($ownerId > 0) {
+                require_once dirname(__DIR__) . '/lib/child_bots.php';
+                require_once dirname(__DIR__) . '/lib/bot_folders.php';
+                $bots = attachFolderIdsToBots(getChildBotsByOwner($ownerId), $ownerId);
+                foreach ($bots as $bot) {
+                    $out['simulate_my_bots'][] = [
+                        'id' => (int) ($bot['id'] ?? 0),
+                        'username' => $bot['bot_username'] ?? null,
+                        'folder_id' => $bot['folder_id'] ?? null,
+                    ];
+                }
+                $out['simulate_folders'] = getBotFolders($ownerId);
             }
-            $out['simulate_folders'] = getBotFolders($ownerId);
         }
         echo json_encode($out, JSON_UNESCAPED_UNICODE);
         exit;
