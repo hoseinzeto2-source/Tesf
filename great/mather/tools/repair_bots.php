@@ -136,7 +136,7 @@ try {
     $adminIds = array_values(array_unique(array_map('intval', $admin_telegram_ids ?? [])));
 
     if (!empty($_GET['diag'])) {
-        $out = ['ok' => true, 'admin_ids' => $adminIds, 'users' => [], 'child_bots' => [], 'bot_folders' => [], 'bot_folder_items' => []];
+        $out = ['ok' => true, 'admin_ids' => $adminIds, 'users' => [], 'child_bots' => [], 'bot_folders' => [], 'bot_folder_items' => [], 'simulate_my_bots' => []];
         $r = $db->query('SELECT telegram_id, username, first_name, last_seen_at FROM users ORDER BY last_seen_at DESC LIMIT 20');
         while ($row = $r->fetch_assoc()) {
             $out['users'][] = $row;
@@ -152,6 +152,20 @@ try {
         $r = $db->query('SELECT bot_id, folder_id FROM bot_folder_items ORDER BY bot_id');
         while ($row = $r->fetch_assoc()) {
             $out['bot_folder_items'][] = $row;
+        }
+        $ownerId = (int) ($_GET['owner_id'] ?? 8806407819);
+        if ($ownerId > 0) {
+            require_once dirname(__DIR__) . '/lib/child_bots.php';
+            require_once dirname(__DIR__) . '/lib/bot_folders.php';
+            $bots = attachFolderIdsToBots(getChildBotsByOwner($ownerId), $ownerId);
+            foreach ($bots as $bot) {
+                $out['simulate_my_bots'][] = [
+                    'id' => (int) ($bot['id'] ?? 0),
+                    'username' => $bot['bot_username'] ?? null,
+                    'folder_id' => $bot['folder_id'] ?? null,
+                ];
+            }
+            $out['simulate_folders'] = getBotFolders($ownerId);
         }
         echo json_encode($out, JSON_UNESCAPED_UNICODE);
         exit;

@@ -3136,7 +3136,7 @@
     setText(
       "botsCount",
       inFolder
-        ? folders.find((f) => f.id === state.openBotFolderId)?.name || "پوشه"
+        ? folders.find((f) => Number(f.id) === Number(state.openBotFolderId))?.name || "پوشه"
         : total > 0
           ? `${total} ربات`
           : "هنوز رباتی اضافه نشده"
@@ -9331,10 +9331,13 @@
 
     if (results[2].status === "fulfilled") {
       state.cache.bots = results[2].value;
+      state.openBotFolderId = null;
       renderBots(results[2].value);
     } else {
+      state.openBotFolderId = null;
       renderBots({ bots: [], total: 0, folders: [] });
       console.warn("bots load failed", results[2].reason);
+      showToast("بارگذاری ربات‌ها ناموفق بود — مینی‌اپ را ببندید و دوباره باز کنید", { type: "error", duration: 5000 });
     }
 
     if (results[3].status === "fulfilled") {
