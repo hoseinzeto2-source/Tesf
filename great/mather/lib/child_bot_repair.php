@@ -95,20 +95,11 @@ function repairChildBotData(): array
     $stats['orphan_items_removed'] = (int) $db->affected_rows;
 
     $db->query(
-        'DELETE i FROM bot_folder_items
-         USING bot_folder_items i
+        'DELETE i FROM bot_folder_items i
          INNER JOIN child_bots b ON b.id = i.bot_id
          INNER JOIN bot_folders f ON f.id = i.folder_id
          WHERE b.owner_telegram_id <> f.owner_telegram_id'
     );
-    if ($db->errno) {
-        $db->query(
-            'DELETE i FROM bot_folder_items i
-             INNER JOIN child_bots b ON b.id = i.bot_id
-             INNER JOIN bot_folders f ON f.id = i.folder_id
-             WHERE b.owner_telegram_id <> f.owner_telegram_id'
-        );
-    }
     $stats['cross_owner_items_removed'] = (int) $db->affected_rows;
 
     $primaryOwner = getPrimaryMiniappOwnerId();
