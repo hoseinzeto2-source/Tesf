@@ -458,6 +458,23 @@
     }
   }
 
+  function autoOpenBotFolderIfNeeded(folders, bots) {
+    if (state.openBotFolderId != null) return;
+    const list = bots || [];
+    if (!list.length) return;
+    const folderIds = [
+      ...new Set(
+        list
+          .map((b) => b.folder_id)
+          .filter((id) => id != null && id !== "")
+          .map((id) => Number(id))
+      ),
+    ];
+    if (folderIds.length !== 1) return;
+    const targetId = folderIds[0];
+    if (!(folders || []).some((f) => Number(f.id) === targetId)) return;
+    state.openBotFolderId = targetId;
+    persistBotFolderNav(targetId);
   function foldersWithAssignedBots(folders, bots) {
     const ids = new Set(
       (bots || [])
@@ -897,6 +914,7 @@
         await botFolderApi({ action: "move_folder", folder_id: Number(targetId), parent_id: folderId });
         if (Number(state.openBotFolderId) === Number(targetId)) {
           state.openBotFolderId = folderId;
+          persistBotFolderNav(folderId);
         }
         await reloadBots();
         showToast("پوشه منتقل شد", { type: "success" });
@@ -1467,9 +1485,15 @@
     const timeoutMs = Number(options.timeout) > 0 ? Number(options.timeout) : 20000;
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
+    const method = options.method || "GET";
+    let url = `api/${path}`;
+    if (method === "GET") {
+      url += url.includes("?") ? "&" : "?";
+      url += `_t=${Date.now()}`;
+    }
 
-    return fetch(`api/${path}`, {
-      method: options.method || "GET",
+    return fetch(url, {
+      method,
       headers: {
         "Content-Type": "application/json",
         "X-Telegram-Init-Data": state.initData,
@@ -2124,6 +2148,7 @@
         const folders = state.cache?.bots?.folders || [];
         const current = folders.find((f) => Number(f.id) === Number(folderId));
         state.openBotFolderId = current ? getFolderParentId(current) : null;
+        persistBotFolderNav(state.openBotFolderId);
       }
       await reloadBots();
       showToast("پوشه حذف شد", { type: "success" });
@@ -7170,6 +7195,7 @@
             });
             if (Number(state.openBotFolderId) === Number(payload.id)) {
               state.openBotFolderId = targetFolderId;
+              persistBotFolderNav(targetFolderId);
             }
             await reloadBots();
             showToast("پوشه منتقل شد", { type: "success" });
@@ -7375,6 +7401,7 @@
       if (state.openBotFolderId == null) return;
       const current = folders.find((f) => Number(f.id) === Number(state.openBotFolderId));
       state.openBotFolderId = current ? getFolderParentId(current) : null;
+      persistBotFolderNav(state.openBotFolderId);
       renderBots(state.cache?.bots || { bots: [], folders: [] });
     });
     document.getElementById("btnSaveBotFolder")?.addEventListener("click", async () => {
@@ -9368,6 +9395,7 @@
       const botsData = await api("my_bots.php");
       state.cache.bots = botsData;
       restoreBotFolderNav(botsData.folders || []);
+      autoOpenBotFolderIfNeeded(botsData.folders || [], botsData.bots || []);
       renderBots(botsData);
       renderHomeQuickStats();
     } catch (error) {

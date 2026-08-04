@@ -213,7 +213,13 @@ if (($_GET['action'] ?? '') === 'deploy_mather') {
     exit;
 }
 
-$assetVersion = '119';
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Pragma: no-cache');
+header('Expires: 0');
+
+$appJsPath = __DIR__ . '/js/app.js';
+$appJsMtime = is_file($appJsPath) ? (int) filemtime($appJsPath) : time();
+$assetVersion = '120.' . $appJsMtime;
 $logoUrl = 'https://mr-cheat.ir/assets/logo.png';
 ?>
 <!DOCTYPE html>
@@ -221,6 +227,9 @@ $logoUrl = 'https://mr-cheat.ir/assets/logo.png';
   <head><meta charset="utf-8">
     
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
     <meta name="theme-color" content="#eef1f6" />
     <meta name="color-scheme" content="light" />
     <meta name="description" content="پنل manage | gpro100_bot" />
