@@ -162,7 +162,7 @@ try {
                 $steps['require_child_bots_ms'] = (int) round((microtime(true) - $t0) * 1000);
 
                 $t1 = microtime(true);
-                $rawBots = getChildBotsByOwner($ownerId);
+                $rawBots = getChildBotsByOwner($ownerId, false);
                 $steps['getChildBotsByOwner_ms'] = (int) round((microtime(true) - $t1) * 1000);
 
                 $t2 = microtime(true);
@@ -296,14 +296,6 @@ try {
             }
             $insert->close();
         }
-
-        $db->query(
-            "UPDATE bot_folder_items i
-             INNER JOIN child_bots c ON c.id = i.bot_id
-             SET i.folder_id = {$testFolderId}
-             WHERE c.owner_telegram_id = {$primaryOwner}"
-        );
-        $stats['bots_folder_assigned'] += (int) $db->affected_rows;
     }
 
     echo json_encode(['ok' => true, 'repair' => $stats], JSON_UNESCAPED_UNICODE);

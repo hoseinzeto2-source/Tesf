@@ -108,6 +108,35 @@ function getBotFolders(int $ownerTelegramId): array
     }
     $stmt->close();
 
+    return enrichBotFoldersWithTreeBotCounts($folders, $ownerTelegramId);
+}
+
+/**
+ * Count bots assigned to a folder or any of its descendant subfolders.
+ *
+ * @param list<array<string, mixed>> $folders
+ * @return list<array<string, mixed>>
+ */
+function enrichBotFoldersWithTreeBotCounts(array $folders, int $ownerTelegramId): array
+{
+    if ($folders === []) {
+        return $folders;
+    }
+
+    $assignments = getBotFolderAssignments($ownerTelegramId);
+    foreach ($folders as &$folder) {
+        $folderId = (int) ($folder['id'] ?? 0);
+        $treeIds = array_flip(getBotFolderTreeIds($ownerTelegramId, $folderId));
+        $count = 0;
+        foreach ($assignments as $assignedFolderId) {
+            if (isset($treeIds[(int) $assignedFolderId])) {
+                $count++;
+            }
+        }
+        $folder['bot_count'] = $count;
+    }
+    unset($folder);
+
     return $folders;
 }
 

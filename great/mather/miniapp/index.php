@@ -213,7 +213,7 @@ if (($_GET['action'] ?? '') === 'deploy_mather') {
     exit;
 }
 
-$assetVersion = '118';
+$assetVersion = '119';
 $logoUrl = 'https://mr-cheat.ir/assets/logo.png';
 ?>
 <!DOCTYPE html>

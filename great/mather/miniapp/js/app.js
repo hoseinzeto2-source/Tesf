@@ -426,6 +426,48 @@
     return parts.join(" · ");
   }
 
+  function persistBotFolderNav(folderId) {
+    try {
+      if (folderId == null || folderId === "") {
+        sessionStorage.removeItem("gpro_bot_folder_id");
+      } else {
+        sessionStorage.setItem("gpro_bot_folder_id", String(folderId));
+      }
+    } catch (e) {
+      /* ignore */
+    }
+  }
+
+  function restoreBotFolderNav(folders) {
+    const list = folders || [];
+    const isValid = (id) => list.some((f) => Number(f.id) === Number(id));
+
+    try {
+      const saved = sessionStorage.getItem("gpro_bot_folder_id");
+      if (saved && isValid(Number(saved))) {
+        state.openBotFolderId = Number(saved);
+        return;
+      }
+    } catch (e) {
+      /* ignore */
+    }
+
+    if (state.openBotFolderId != null && !isValid(state.openBotFolderId)) {
+      state.openBotFolderId = null;
+      persistBotFolderNav(null);
+    }
+  }
+
+  function foldersWithAssignedBots(folders, bots) {
+    const ids = new Set(
+      (bots || [])
+        .map((b) => b.folder_id)
+        .filter((id) => id != null && id !== "")
+        .map((id) => Number(id))
+    );
+    return (folders || []).filter((f) => ids.has(Number(f.id)));
+  }
+
   function explorerFolderMeta(folder, folderKind = "channel") {
     return folderKind === "bot" ? formatBotFolderMeta(folder) : formatFolderMeta(folder);
   }
@@ -484,6 +526,7 @@
       btn.addEventListener("click", () => {
         const raw = btn.getAttribute("data-bot-breadcrumb-folder");
         state.openBotFolderId = raw ? Number(raw) : null;
+        persistBotFolderNav(state.openBotFolderId);
         renderBots(state.cache?.bots || { bots: [], folders: [] });
         tg?.HapticFeedback?.selectionChanged();
       });
@@ -3178,11 +3221,20 @@
     }
 
     if (!visibleBots.length && !visibleFolders.length) {
+      const folderHints = !inFolder ? foldersWithAssignedBots(folders, bots) : [];
       list.innerHTML = `
         <div class="explorer-empty">
           <i class="fa-solid fa-robot"></i>
-          <p>${inFolder ? "این پوشه خالی است" : "ربات‌ها در پوشه‌ها هستند"}</p>
-          <span>${inFolder ? "ربات‌ها را بکشید و اینجا رها کنید" : "پوشه‌ها را در صفحه اصلی باز کنید"}</span>
+          <p>${inFolder ? "این پوشه خالی است" : total > 0 ? `${total} ربات داخل پوشه‌هاست` : "هنوز رباتی اضافه نشده"}</p>
+          <span>${
+            inFolder
+              ? "ربات‌ها را بکشید و اینجا رها کنید"
+              : folderHints.length
+                ? `پوشه «${escapeHtml(folderHints[0].name)}» را باز کنید${folderHints.length > 1 ? " (یا پوشه‌های دیگر)" : ""}`
+                : total > 0
+                  ? "پوشه‌های بالا را باز کنید تا ربات‌ها را ببینید"
+                  : "روی «افزودن ربات» بزنید"
+          }</span>
         </div>`;
       return;
     }
@@ -7002,6 +7054,7 @@
           return;
         }
         state.openBotFolderId = id;
+        persistBotFolderNav(id);
         renderBots(state.cache.bots);
         tg?.HapticFeedback?.selectionChanged();
       });
@@ -9314,7 +9367,7 @@
     try {
       const botsData = await api("my_bots.php");
       state.cache.bots = botsData;
-      state.openBotFolderId = null;
+      restoreBotFolderNav(botsData.folders || []);
       renderBots(botsData);
       renderHomeQuickStats();
     } catch (error) {
