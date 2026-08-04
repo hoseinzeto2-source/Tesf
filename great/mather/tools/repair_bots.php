@@ -153,6 +153,14 @@ try {
         while ($row = $r->fetch_assoc()) {
             $out['bot_folder_items'][] = $row;
         }
+        $r = $db->query('SELECT id, owner_telegram_id, name, channel_folder_id, bot_folder_id, folder_id FROM auto_post_sessions ORDER BY id');
+        if ($r) {
+            while ($row = $r->fetch_assoc()) {
+                $out['auto_post_sessions'][] = $row;
+            }
+        } else {
+            $out['auto_post_sessions_error'] = $db->error;
+        }
         if (!empty($_GET['simulate'])) {
             $ownerId = (int) ($_GET['owner_id'] ?? 8806407819);
             if ($ownerId > 0) {
@@ -184,6 +192,41 @@ try {
                         'folder_id' => $bot['folder_id'] ?? null,
                     ];
                 }
+                $out['simulate_my_bots_total'] = count($bots);
+
+                if (!empty($_GET['full_simulate'])) {
+                    require_once dirname(__DIR__) . '/lib/bot_health.php';
+                    require_once dirname(__DIR__) . '/lib/bot_profile.php';
+                    $safe = [];
+                    foreach ($bots as $bot) {
+                        try {
+                            $health = childBotHealthPayload($bot);
+                            $photo = botPhotoPayloadFromFileId((int) $bot['id'], $bot['profile_photo_file_id'] ?? null);
+                            $safe[] = [
+                                'id' => (int) $bot['id'],
+                                'bot_username' => $bot['bot_username'] ?? null,
+                                'folder_id' => $bot['folder_id'] ?? null,
+                                'health_status' => $health['health_status'],
+                                'has_photo' => $photo['has_photo'],
+                            ];
+                        } catch (Throwable $rowError) {
+                            $out['simulate_row_errors'][] = [
+                                'bot_id' => (int) ($bot['id'] ?? 0),
+                                'error' => $rowError->getMessage(),
+                            ];
+                        }
+                    }
+                    $out['simulate_my_bots_safe'] = $safe;
+                    $out['simulate_my_bots_safe_total'] = count($safe);
+
+                    require_once dirname(__DIR__) . '/lib/auto_post.php';
+                    $out['simulate_auto_post'] = [
+                        'folders' => getAutoPostFolders($ownerId),
+                        'sessions' => getAutoPostSessions($ownerId),
+                        'total' => count(getAutoPostSessions($ownerId)),
+                    ];
+                }
+
                 $out['simulate_timing'] = $steps;
             }
         }
