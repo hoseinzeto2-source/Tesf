@@ -475,6 +475,8 @@
     if (!(folders || []).some((f) => Number(f.id) === targetId)) return;
     state.openBotFolderId = targetId;
     persistBotFolderNav(targetId);
+  }
+
   function foldersWithAssignedBots(folders, bots) {
     const ids = new Set(
       (bots || [])
