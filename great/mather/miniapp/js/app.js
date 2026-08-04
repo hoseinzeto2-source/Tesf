@@ -1600,9 +1600,9 @@
     const bots = state.cache?.bots;
 
     const channelMembers = dash?.totals?.member_count ?? 0;
-    const botMembers = bots?.total_bot_users ?? 0;
+    const botCount = bots?.total ?? (bots?.bots || []).length ?? 0;
 
-    setText("homeBotMembers", formatNumber(botMembers));
+    setText("homeBotMembers", formatNumber(botCount));
     setText("homeChannelMembers", formatNumber(channelMembers));
   }
 
@@ -3227,12 +3227,10 @@
 
     const visibleBots = sortExplorerPinned(
       bots.filter((b) => {
-      const fid = b.folder_id ?? null;
-      if (inFolder) return Number(fid) === Number(state.openBotFolderId);
-      if (fid == null || fid === "") return true;
-      const folderExists = folders.some((f) => Number(f.id) === Number(fid));
-      return !folderExists;
-    })
+        const fid = b.folder_id ?? null;
+        if (inFolder) return Number(fid) === Number(state.openBotFolderId);
+        return true;
+      })
     );
 
     const visibleFolders = getChildFolders(folders, inFolder ? state.openBotFolderId : null);
@@ -3287,11 +3285,12 @@
         const title = bot.bot_name || (bot.bot_username ? `@${bot.bot_username}` : "ربات");
         const initial = title.replace(/^@/, "").charAt(0).toUpperCase() || "B";
         const typeLabel = getBotTypeLabel(bot);
+        const folderLabel = !inFolder && bot.folder_name ? ` · 📁 ${bot.folder_name}` : "";
         const channelFolderLabel = bot.channel_folder_name ? ` · ${bot.channel_folder_name}` : "";
         const uploadMeta = bot.bot_type === "uploader" && bot.uploads_count != null
           ? ` · ${formatNumber(bot.uploads_count)} آپلود`
           : "";
-        const meta = `${typeLabel}${channelFolderLabel}${uploadMeta}`;
+        const meta = `${typeLabel}${folderLabel}${channelFolderLabel}${uploadMeta}`;
         const banned = isBotBanned(bot);
 
         return `
@@ -4104,8 +4103,7 @@
       sessions.filter((s) => {
         const fid = s.folder_id ?? null;
         if (inFolder) return Number(fid) === Number(state.openAutoPostFolderId);
-        if (fid == null || fid === "") return true;
-        return !folders.some((f) => Number(f.id) === Number(fid));
+        return true;
       })
     );
 
@@ -9378,6 +9376,59 @@
     renderUploaderVersions(server);
   }
 
+  async function loadToolsPlugins() {
+    if (state.cache?.toolsPluginsLoaded || state.cache?.toolsPluginsLoading) {
+      return state.cache;
+    }
+    state.cache = state.cache || {};
+    state.cache.toolsPluginsLoading = true;
+
+    const results = await Promise.allSettled([
+      hashtagToolsApi(),
+      bannerToolsApi(),
+      glassButtonToolsApi(),
+      zapasBotsApi(),
+    ]);
+
+    if (results[0].status === "fulfilled") {
+      state.cache.hashtagTools = results[0].value;
+    } else {
+      state.cache.hashtagTools = { folders: [], sets: [] };
+      console.warn("hashtag tools load failed", results[0].reason);
+    }
+
+    if (results[1].status === "fulfilled") {
+      state.cache.bannerTools = results[1].value;
+    } else {
+      state.cache.bannerTools = { groups: [], bindings: [], stats: {} };
+      console.warn("banner tools load failed", results[1].reason);
+    }
+
+    if (results[2].status === "fulfilled") {
+      state.cache.glassButtonTools = results[2].value;
+    } else {
+      state.cache.glassButtonTools = { settings: [], stats: {} };
+      console.warn("glass button tools load failed", results[2].reason);
+    }
+
+    if (results[3].status === "fulfilled") {
+      state.cache.zapasTools = results[3].value;
+    } else {
+      state.cache.zapasTools = { bots: [], bindings: [], replacements: [], stats: {} };
+      console.warn("zapas tools load failed", results[3].reason);
+    }
+
+    state.cache.toolsPluginsLoaded = true;
+    state.cache.toolsPluginsLoading = false;
+    renderToolsExplorer(
+      state.cache.hashtagTools,
+      state.cache.bannerTools,
+      state.cache.glassButtonTools,
+      state.cache.zapasTools
+    );
+    return state.cache;
+  }
+
   async function loadAppData(auth) {
     state.cache = {
       auth: auth || state.cache?.auth || null,
@@ -9390,52 +9441,82 @@
       bannerTools: null,
       glassButtonTools: null,
       zapasTools: null,
+      toolsPluginsLoaded: false,
+      toolsPluginsLoading: false,
     };
     if (auth) renderProfile(auth);
 
     try {
-      const botsData = await api("my_bots.php");
+      const boot = await api("bootstrap.php");
+      if (!boot.ok) {
+        throw new Error(boot.error || "bootstrap_failed");
+      }
+
+      const botsData = boot.bots || { bots: [], folders: [], total: 0 };
       state.cache.bots = botsData;
       restoreBotFolderNav(botsData.folders || []);
-      autoOpenBotFolderIfNeeded(botsData.folders || [], botsData.bots || []);
       renderBots(botsData);
       renderHomeQuickStats();
-    } catch (error) {
-      state.openBotFolderId = null;
-      renderBots({ bots: [], total: 0, folders: [] });
-      console.warn("bots load failed", error);
-      showToast("بارگذاری ربات‌ها ناموفق بود", { type: "error", duration: 5000 });
-    }
 
-    try {
-      const channelsData = await api("channels.php?lite=1");
+      const channelsData = boot.channels || { channels: [], folders: [], total: 0 };
       state.cache.channels = channelsData;
       renderChannels(channelsData);
       renderHomeQuickStats();
-    } catch (error) {
-      renderChannels({ channels: [], total: 0, totals: {}, dashboard: { channels: [] } });
-      console.warn("channels load failed", error);
-      showToast("بارگذاری کانال‌ها ناموفق بود", { type: "error" });
-    }
 
-    void api("channels.php")
-      .then((fullChannels) => {
-        state.cache.channels = fullChannels;
-        renderChannels(fullChannels);
+      const autoPostData = boot.auto_post || { sessions: [], folders: [], total: 0 };
+      state.cache.autoPost = autoPostData;
+      renderAutoPost(autoPostData);
+      renderHomeQuickStats();
+
+      void api("channels.php")
+        .then((fullChannels) => {
+          state.cache.channels = fullChannels;
+          renderChannels(fullChannels);
+          renderHomeQuickStats();
+        })
+        .catch((error) => {
+          console.warn("channels full stats failed", error);
+        });
+    } catch (error) {
+      console.warn("bootstrap load failed, falling back", error);
+      try {
+        const botsData = await api("my_bots.php");
+        state.cache.bots = botsData;
+        restoreBotFolderNav(botsData.folders || []);
+        renderBots(botsData);
         renderHomeQuickStats();
-      })
-      .catch((error) => {
-        console.warn("channels full stats failed", error);
-      });
+      } catch (botsError) {
+        state.openBotFolderId = null;
+        renderBots({ bots: [], total: 0, folders: [] });
+        console.warn("bots load failed", botsError);
+        showToast("بارگذاری ربات‌ها ناموفق بود", { type: "error", duration: 5000 });
+      }
+
+      try {
+        const channelsData = await api("channels.php?lite=1");
+        state.cache.channels = channelsData;
+        renderChannels(channelsData);
+        renderHomeQuickStats();
+      } catch (channelsError) {
+        renderChannels({ channels: [], total: 0, totals: {}, dashboard: { channels: [] } });
+        console.warn("channels load failed", channelsError);
+        showToast("بارگذاری کانال‌ها ناموفق بود", { type: "error" });
+      }
+
+      try {
+        const autoPostData = await autoPostApi();
+        state.cache.autoPost = autoPostData;
+        renderAutoPost(autoPostData);
+        renderHomeQuickStats();
+      } catch (autoPostError) {
+        renderAutoPost({ folders: [], sessions: [], total: 0 });
+        console.warn("auto post load failed", autoPostError);
+      }
+    }
 
     const results = await Promise.allSettled([
       api("server.php"),
       api("content_groups.php"),
-      autoPostApi(),
-      hashtagToolsApi(),
-      bannerToolsApi(),
-      glassButtonToolsApi(),
-      zapasBotsApi(),
     ]);
 
     if (results[0].status === "fulfilled") {
@@ -9456,43 +9537,7 @@
       console.warn("content groups load failed", results[1].reason);
     }
 
-    if (results[2].status === "fulfilled") {
-      state.cache.autoPost = results[2].value;
-      renderAutoPost(results[2].value);
-    } else {
-      renderAutoPost({ folders: [], sessions: [], total: 0 });
-      console.warn("auto post load failed", results[2].reason);
-    }
-
-    if (results[3].status === "fulfilled") {
-      state.cache.hashtagTools = results[3].value;
-    } else {
-      state.cache.hashtagTools = { folders: [], sets: [] };
-      console.warn("hashtag tools load failed", results[3].reason);
-    }
-
-    if (results[4].status === "fulfilled") {
-      state.cache.bannerTools = results[4].value;
-    } else {
-      state.cache.bannerTools = { groups: [], bindings: [], stats: {} };
-      console.warn("banner tools load failed", results[4].reason);
-    }
-
-    if (results[5].status === "fulfilled") {
-      state.cache.glassButtonTools = results[5].value;
-    } else {
-      state.cache.glassButtonTools = { settings: [], stats: {} };
-      console.warn("glass button tools load failed", results[5].reason);
-    }
-
-    if (results[6].status === "fulfilled") {
-      state.cache.zapasTools = results[6].value;
-    } else {
-      state.cache.zapasTools = { bots: [], bindings: [], replacements: [], stats: {} };
-      console.warn("zapas tools load failed", results[6].reason);
-    }
-
-    renderToolsExplorer(state.cache.hashtagTools, state.cache.bannerTools, state.cache.glassButtonTools, state.cache.zapasTools);
+    void loadToolsPlugins();
     renderHomeQuickStats();
 
     return state.cache;

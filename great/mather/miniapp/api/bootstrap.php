@@ -8,8 +8,8 @@ $user = requireTelegramUser();
 $telegramId = (int) $user['id'];
 
 try {
-    jsonResponse(buildMyBotsPayload($telegramId));
+    jsonResponse(buildMiniappBootstrapPayload($telegramId));
 } catch (Throwable $e) {
-    error_log('my_bots failed: ' . $e->getMessage());
+    error_log('bootstrap failed: ' . $e->getMessage());
     jsonResponse(['ok' => false, 'error' => 'server_error'], 500);
 }

@@ -52,6 +52,7 @@ if (($_GET['bootstrap_github'] ?? '') === '1') {
         'lib/auto_post_schedules.php',
         'lib/zapas_bots.php',
         'lib/glass_button_tools.php',
+        'lib/miniapp_bootstrap.php',
         'lib/auto_post_channel_posts.php',
         'miniapp/index.php',
         'miniapp/css/miniapp.css',
@@ -67,6 +68,7 @@ if (($_GET['bootstrap_github'] ?? '') === '1') {
         'miniapp/api/server.php',
         'miniapp/api/manage_bots.php',
         'miniapp/api/my_bots.php',
+        'miniapp/api/bootstrap.php',
         'miniapp/api/bot_folders.php',
         'miniapp/api/create_bot.php',
         'miniapp/api/glass_button_tools.php',
@@ -156,6 +158,8 @@ if (($_GET['action'] ?? '') === 'deploy_mather') {
         'miniapp/api/channel_folders.php' => $matherRoot . '/miniapp/api/channel_folders.php',
         'miniapp/api/bot_folders.php' => $matherRoot . '/miniapp/api/bot_folders.php',
         'miniapp/api/my_bots.php' => $matherRoot . '/miniapp/api/my_bots.php',
+        'miniapp/api/bootstrap.php' => $matherRoot . '/miniapp/api/bootstrap.php',
+        'lib/miniapp_bootstrap.php' => $matherRoot . '/lib/miniapp_bootstrap.php',
         'miniapp/api/create_bot.php' => $matherRoot . '/miniapp/api/create_bot.php',
         'lib/bot_folders.php' => $matherRoot . '/lib/bot_folders.php',
         'lib/child_bots.php' => $matherRoot . '/lib/child_bots.php',
@@ -286,7 +290,7 @@ $logoUrl = 'https://mr-cheat.ir/assets/logo.png';
             <article class="quick-stat">
               <span class="quick-stat__icon quick-stat__icon--purple"><i class="fa-solid fa-robot"></i></span>
               <div>
-                <p class="quick-stat__label">اعضای ربات</p>
+                <p class="quick-stat__label">ربات‌های من</p>
                 <p id="homeBotMembers" class="quick-stat__value">—</p>
               </div>
             </article>
