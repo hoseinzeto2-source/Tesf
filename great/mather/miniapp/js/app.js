@@ -1598,9 +1598,10 @@
   function renderHomeQuickStats() {
     const dash = getDashboardPayload(state.cache?.channels);
     const bots = state.cache?.bots;
-
+    const botList = bots?.bots || [];
     const channelMembers = dash?.totals?.member_count ?? 0;
-    const botCount = bots?.total ?? (bots?.bots || []).length ?? 0;
+    // Prefer live list length so a stale/wrong total cannot show ۰ while bots exist
+    const botCount = botList.length > 0 ? botList.length : Number(bots?.total ?? 0);
 
     setText("homeBotMembers", formatNumber(botCount));
     setText("homeChannelMembers", formatNumber(channelMembers));

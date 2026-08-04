@@ -10,13 +10,59 @@ require_once __DIR__ . '/channels.php';
 require_once __DIR__ . '/auto_post.php';
 
 /**
+ * Shared manage panel: if an admin has no owned bots/sessions, use the owner who does.
+ * getChildBotsByOwner is strictly per owner_telegram_id, so admins who only manage
+ * (e.g. 927959538) otherwise see total=0 while bots live under another admin/user.
+ */
+function resolveMiniappDataOwnerId(int $telegramId): int
+{
+    if ($telegramId <= 0) {
+        return $telegramId;
+    }
+
+    ensureChildBotTables();
+    $db = getDb();
+    $stmt = $db->prepare('SELECT COUNT(*) AS c FROM child_bots WHERE owner_telegram_id = ?');
+    $stmt->bind_param('i', $telegramId);
+    $stmt->execute();
+    $ownedCount = (int) ($stmt->get_result()->fetch_assoc()['c'] ?? 0);
+    $stmt->close();
+    if ($ownedCount > 0) {
+        return $telegramId;
+    }
+
+    global $admin_telegram_ids;
+    $adminIds = array_map('intval', $admin_telegram_ids ?? []);
+    if (!in_array($telegramId, $adminIds, true)) {
+        return $telegramId;
+    }
+
+    $result = $db->query(
+        'SELECT owner_telegram_id
+         FROM child_bots
+         GROUP BY owner_telegram_id
+         ORDER BY COUNT(*) DESC, owner_telegram_id ASC
+         LIMIT 1'
+    );
+    if ($result && ($row = $result->fetch_assoc())) {
+        $ownerId = (int) ($row['owner_telegram_id'] ?? 0);
+        if ($ownerId > 0) {
+            return $ownerId;
+        }
+    }
+
+    return $telegramId;
+}
+
+/**
  * @return array<string, mixed>
  */
 function buildMyBotsPayload(int $telegramId): array
 {
-    $bots = getChildBotsByOwner($telegramId, false);
-    $folders = getBotFolders($telegramId);
-    $bots = attachFolderIdsToBots($bots, $telegramId, $folders);
+    $ownerId = resolveMiniappDataOwnerId($telegramId);
+    $bots = getChildBotsByOwner($ownerId, false);
+    $folders = getBotFolders($ownerId);
+    $bots = attachFolderIdsToBots($bots, $ownerId, $folders);
 
     $folderNameMap = [];
     foreach ($folders as $folder) {
@@ -86,6 +132,8 @@ function buildMyBotsPayload(int $telegramId): array
         'total_bot_users' => $totalBotUsers,
         'bots' => $safe,
         'folders' => $folders,
+        'viewer_telegram_id' => $telegramId,
+        'data_owner_telegram_id' => $ownerId,
     ];
 }
 
@@ -94,14 +142,17 @@ function buildMyBotsPayload(int $telegramId): array
  */
 function buildAutoPostListPayload(int $telegramId): array
 {
-    $sessions = getAutoPostSessions($telegramId);
+    $ownerId = resolveMiniappDataOwnerId($telegramId);
+    $sessions = getAutoPostSessions($ownerId);
 
     return [
         'ok' => true,
-        'folders' => getAutoPostFolders($telegramId),
+        'folders' => getAutoPostFolders($ownerId),
         'sessions' => $sessions,
         'allowed_channel_folder_ids' => getAutoPostAllowedChannelFolderIds(),
         'total' => count($sessions),
+        'viewer_telegram_id' => $telegramId,
+        'data_owner_telegram_id' => $ownerId,
     ];
 }
 
@@ -144,10 +195,42 @@ function buildChannelsLitePayload(): array
  */
 function buildMiniappBootstrapPayload(int $telegramId): array
 {
-    return [
-        'ok' => true,
-        'bots' => buildMyBotsPayload($telegramId),
-        'auto_post' => buildAutoPostListPayload($telegramId),
-        'channels' => buildChannelsLitePayload(),
-    ];
+    $payload = ['ok' => true];
+
+    try {
+        $payload['bots'] = buildMyBotsPayload($telegramId);
+    } catch (Throwable $e) {
+        error_log('bootstrap bots failed: ' . $e->getMessage());
+        $payload['bots'] = ['ok' => false, 'total' => 0, 'total_bot_users' => 0, 'bots' => [], 'folders' => []];
+    }
+
+    try {
+        $payload['auto_post'] = buildAutoPostListPayload($telegramId);
+    } catch (Throwable $e) {
+        error_log('bootstrap auto_post failed: ' . $e->getMessage());
+        $payload['auto_post'] = [
+            'ok' => false,
+            'folders' => [],
+            'sessions' => [],
+            'allowed_channel_folder_ids' => [],
+            'total' => 0,
+        ];
+    }
+
+    try {
+        $payload['channels'] = buildChannelsLitePayload();
+    } catch (Throwable $e) {
+        error_log('bootstrap channels failed: ' . $e->getMessage());
+        $payload['channels'] = [
+            'ok' => false,
+            'lite' => true,
+            'total' => 0,
+            'channels' => [],
+            'folders' => [],
+            'totals' => ['member_count' => 0, 'joins_1h' => 0, 'joins_12h' => 0, 'joins_24h' => 0],
+            'dashboard' => ['channels' => [], 'totals' => ['member_count' => 0]],
+        ];
+    }
+
+    return $payload;
 }

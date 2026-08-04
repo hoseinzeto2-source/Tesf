@@ -227,6 +227,13 @@ try {
                     ];
                 }
 
+                if (!empty($_GET['payload'])) {
+                    require_once dirname(__DIR__) . '/lib/miniapp_bootstrap.php';
+                    $out['resolve_owner_id'] = resolveMiniappDataOwnerId($ownerId);
+                    $out['payload_my_bots'] = buildMyBotsPayload($ownerId);
+                    $out['payload_auto_post_total'] = buildAutoPostListPayload($ownerId)['total'] ?? 0;
+                }
+
                 $out['simulate_timing'] = $steps;
             }
         }
