@@ -165,6 +165,7 @@ if (($_GET['sync_github'] ?? '') === '1') {
         'lib/auto_post.php',
         'miniapp/index.php',
         'miniapp/js/app.js',
+        'miniapp/js/.htaccess',
         'miniapp/lib/telegram_webapp.php',
         'miniapp/api/auth.php',
         'miniapp/api/channels.php',
